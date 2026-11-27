@@ -77,9 +77,11 @@ black/secure card instead, per the note above).
 
 `AppSwitcherProtectionMode.image` and `AppSwitcherProtectionMode.imageBlur`
 require the host app to bundle an image set named `SecureScreenPrivacyImage`
-in `Assets.xcassets` **on iOS**. `enableAppSwitcherProtection` returns
-`false` immediately if that image is missing, rather than failing silently
-later. The image is shown at its correct aspect ratio (never cropped or
+in `Assets.xcassets` **on iOS**. If that image is missing, protection still
+turns on (and `enableAppSwitcherProtection` returns `true`) so the screen is
+never left visible: `image` falls back to a plain `imageBackgroundColor`
+cover and `imageBlur` to a plain blur, and a warning is logged to the Xcode
+console. The image is shown at its correct aspect ratio (never cropped or
 stretched); `imageBackgroundColor` fills any resulting letterbox/pillarbox
 bars and shows through transparent areas of the image itself. Android has
 no equivalent resource requirement, since it doesn't render an image

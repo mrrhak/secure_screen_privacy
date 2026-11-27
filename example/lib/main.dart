@@ -407,9 +407,9 @@ class _HomeScreenState extends State<_HomeScreen> {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
-                    'Image mode requires a "secure_screen_privacy_image" drawable '
-                    '(Android) / "SecureScreenPrivacyImage" asset (iOS) bundled in '
-                    "the host app.",
+                    'Image modes show the "SecureScreenPrivacyImage" asset (iOS) '
+                    'bundled in the host app. Without it, image falls back to the '
+                    'background color and imageBlur to a plain blur.',
                     textAlign: TextAlign.center,
                   ),
                 ),
