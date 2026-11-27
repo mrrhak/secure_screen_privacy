@@ -118,14 +118,23 @@ await subscription.cancel();
 ```
 
 Subscribing to `screenshotEvents` *is* what starts native detection
-(Android: a `ContentObserver` on the images `MediaStore`; iOS:
+(Android 14+: `Activity.ScreenCaptureCallback`; older Android: a
+`ContentObserver` on the images `MediaStore`; iOS:
 `UIApplication.userDidTakeScreenshotNotification`); cancelling the
 subscription stops it. There's no separate start/stop method. `ScreenshotEvent`
 carries only a `timestamp` — no file path or image data.
 
 Detection is best-effort and has real platform-specific caveats:
 
-> **Android note:** no storage/media permission is requested, so detection
+> **Android 14+ (API 34+):** uses the OS's own screenshot callback, so each
+> screenshot of your app is reported exactly once. It only fires while your
+> app's screen is visible, and not at all while capture protection
+> (`FLAG_SECURE`) is on, since the screenshot is blocked anyway. The plugin
+> declares the `DETECT_SCREEN_CAPTURE` permission for this. It's an
+> install-time permission, never shown to the user, not a storage/media
+> permission, and it's merged into your app's manifest automatically.
+
+> **Android 13 and below:** no storage/media permission is requested, so detection
 > uses a heuristic filter over `MediaStore` change notifications (matching a
 > "screenshot" substring in the file's name/path, and requiring the row to be
 > freshly added) to avoid reporting every new photo/download as a screenshot.
@@ -133,18 +142,19 @@ Detection is best-effort and has real platform-specific caveats:
 > (still emits) rather than silently dropping a real screenshot — so it can
 > both under- and over-report depending on locale (a localized display name
 > like "Bildschirmfoto" won't match) and OEM (custom screenshot folder
-> naming). Not confirmed across real hardware/OEM variance.
+> naming). Deleted images are ignored, and the several notifications a single
+> screenshot produces are merged into one event (anything within 1.5 seconds
+> of the last event is dropped). New images saved by other apps can still be
+> reported. Not confirmed across real hardware/OEM variance.
 
 > **iOS note:** uses `UIApplication.userDidTakeScreenshotNotification`, which
 > never provides a file path or image data — this is why the payload is
 > timestamp-only by design, not a placeholder workaround.
 
-> **Both platforms:** detection isn't scoped to "this app's UI was visible" —
-> it fires for any screenshot taken anywhere while a subscription is active
-> (Android: MediaStore-wide; iOS: process-wide notification). Pair the
-> subscription with your own app-foreground lifecycle tracking if you need to
-> filter that down. There's also no de-duplication if the underlying platform
-> signal fires more than once for a single screenshot.
+> **Scope:** on Android 14+ only screenshots of your visible app are
+> reported. On Android 13 and below detection is MediaStore-wide, and on iOS
+> it's a process-wide notification. On those, pair the subscription with your
+> own app-foreground tracking if you need to filter it down.
 
 ### Screen recording detection
 
@@ -165,7 +175,9 @@ Subscribing to `screenRecordingEvents` *is* what starts native detection
 `UIScreen.capturedDidChangeNotification`); cancelling the subscription stops
 it. There's no separate start/stop method. The current state is emitted
 immediately on subscribe, so a late subscriber doesn't miss an
-already-in-progress recording. No permission is required on either platform.
+already-in-progress recording. No runtime permission is required on either
+platform (the API 34 path uses the install-time `DETECT_SCREEN_CAPTURE`
+permission the plugin already declares).
 
 > **Android note:** reliability depends heavily on API level. On **API 35+**,
 > `WindowManager.addScreenRecordingCallback` gives true start *and* stop

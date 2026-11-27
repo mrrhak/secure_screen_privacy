@@ -77,16 +77,19 @@ class SecureScreenPrivacy {
 
   /// A broadcast stream of screenshot detections.
   ///
-  /// Subscribing starts native screenshot detection (Android: a
-  /// `ContentObserver` on the images `MediaStore`; iOS:
+  /// Subscribing starts native screenshot detection (Android 14+:
+  /// `Activity.ScreenCaptureCallback`; older Android: a `ContentObserver` on
+  /// the images `MediaStore`; iOS:
   /// `UIApplication.userDidTakeScreenshotNotification`); cancelling the last
   /// subscription stops it. There is no separate start/stop method - the
   /// subscription *is* the toggle.
   ///
   /// Detection is best-effort on both platforms - see the README for the
-  /// documented caveats (Android: a heuristic MediaStore filter that can
-  /// false-positive on non-screenshot images and false-negative on some
-  /// OEMs/locales; iOS: no image data or file path is ever available).
+  /// documented caveats (Android 14+: only screenshots of this app's visible
+  /// screen, none while capture protection is on; Android 13 and below: a
+  /// de-duplicated heuristic MediaStore filter that can still false-positive
+  /// on other new images and false-negative on some OEMs/locales; iOS: no
+  /// image data or file path is ever available).
   Stream<ScreenshotEvent> get screenshotEvents =>
       SecureScreenPrivacyPlatform.instance.screenshotEvents;
 

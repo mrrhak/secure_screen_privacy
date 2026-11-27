@@ -1,6 +1,7 @@
 package com.mrrhak.secure_screen_privacy
 
 import android.app.Activity
+import android.content.ContentResolver
 import android.content.Context
 import android.database.ContentObserver
 import android.net.Uri
@@ -41,13 +42,20 @@ class SecureScreenPrivacyPlugin :
     // custom overlay modes.
     private var isAppSwitcherProtectionEnabled = false
 
-    // Screenshot event stream. Engine-scoped (registered against appContext)
-    // rather than tied to Activity attach state - a screenshot is a
-    // device-level event, not something that should stop being detected
-    // during e.g. a config-change-driven Activity recreation.
+    // Screenshot event stream. Two detection paths, picked by
+    // screenshotDetectionPathForSdkInt: on API 34+ the OS's own
+    // Activity.ScreenCaptureCallback (exact, once per screenshot of this
+    // app's visible Activity - Activity-scoped, so wired through the
+    // ActivityAware callbacks via isScreenshotListening, like screen
+    // recording below); below API 34 a MediaStore ContentObserver registered
+    // against the engine-scoped appContext, de-duplicated by
+    // screenshotDeduper.
     private lateinit var screenshotEventChannel: EventChannel
     private var screenshotEventSink: EventChannel.EventSink? = null
+    private var isScreenshotListening = false
+    private var screenshotCaptureCallback: Activity.ScreenCaptureCallback? = null // API 34+ only
     private var screenshotContentObserver: ContentObserver? = null
+    private val screenshotDeduper = ScreenshotEventDeduper()
 
     // Dedicated background thread so the MediaStore query in
     // handleMediaStoreChange() never runs on the main thread (disk IO);
@@ -130,21 +138,69 @@ class SecureScreenPrivacyPlugin :
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
         screenshotEventSink = events
-        registerScreenshotObserver()
+        isScreenshotListening = true
+        when (screenshotDetectionPathForSdkInt(Build.VERSION.SDK_INT)) {
+            ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK -> registerScreenshotCaptureCallbackIfNeeded()
+            ScreenshotDetectionPath.MEDIA_STORE_OBSERVER -> registerScreenshotObserver()
+        }
     }
 
     override fun onCancel(arguments: Any?) {
+        isScreenshotListening = false
+        unregisterScreenshotCaptureCallback()
         unregisterScreenshotObserver()
         screenshotEventSink = null
     }
 
+    // API 34+: Activity.ScreenCaptureCallback fires exactly once per
+    // screenshot, only while this app's Activity is visible, and never when
+    // the window has FLAG_SECURE (the screenshot is blocked anyway). Needs
+    // the install-time DETECT_SCREEN_CAPTURE permission declared in this
+    // plugin's AndroidManifest.xml - not a storage/media permission.
+    @Suppress("NewApi")
+    private fun registerScreenshotCaptureCallbackIfNeeded() {
+        if (!isScreenshotListening || screenshotCaptureCallback != null) return
+        if (screenshotDetectionPathForSdkInt(Build.VERSION.SDK_INT) !=
+            ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK
+        ) return
+        val act = activity ?: return
+        val callback = Activity.ScreenCaptureCallback {
+            screenshotEventSink?.success(mapOf("timestamp" to System.currentTimeMillis()))
+        }
+        try {
+            act.registerScreenCaptureCallback(act.mainExecutor, callback)
+            screenshotCaptureCallback = callback
+        } catch (e: SecurityException) {
+            // Only if a host app strips DETECT_SCREEN_CAPTURE from the merged
+            // manifest - degrade to no detection instead of crashing.
+        }
+    }
+
+    @Suppress("NewApi")
+    private fun unregisterScreenshotCaptureCallback() {
+        val callback = screenshotCaptureCallback ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            activity?.unregisterScreenCaptureCallback(callback)
+        }
+        screenshotCaptureCallback = null
+    }
+
     private fun registerScreenshotObserver() {
         if (screenshotContentObserver != null) return
+        screenshotDeduper.reset()
         val thread = HandlerThread("secure_screen_privacy-screenshot-observer").apply { start() }
         screenshotObserverThread = thread
         val observer = object : ContentObserver(Handler(thread.looper)) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
                 handleMediaStoreChange(uri)
+            }
+
+            // API 30+ delivers change flags; a delete is never a new
+            // screenshot. (The framework's default implementation of this
+            // overload just calls onChange(selfChange, uri) per URI.)
+            override fun onChange(selfChange: Boolean, uris: Collection<Uri>, flags: Int) {
+                if (!isMediaStoreChangeWorthChecking(flags)) return
+                uris.forEach { handleMediaStoreChange(it) }
             }
         }
         try {
@@ -207,7 +263,15 @@ class SecureScreenPrivacyPlugin :
             // that case.
         }
 
-        if (shouldEmitScreenshotEvent(displayName, relativePathOrData, dateAddedMillis, System.currentTimeMillis())) {
+        val now = System.currentTimeMillis()
+        // One screenshot produces several MediaStore notifications (Android
+        // 10+ inserts the row as pending, then updates it once written), and
+        // without a media permission the query above usually returns nothing,
+        // so each of them would pass the fail-open filter - the deduper
+        // collapses that burst into a single event.
+        if (shouldEmitScreenshotEvent(displayName, relativePathOrData, dateAddedMillis, now) &&
+            screenshotDeduper.shouldEmit(now)
+        ) {
             val payload = mapOf("timestamp" to (dateAddedMillis ?: System.currentTimeMillis()))
             Handler(Looper.getMainLooper()).post {
                 screenshotEventSink?.success(payload)
@@ -358,6 +422,8 @@ class SecureScreenPrivacyPlugin :
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
         screenshotEventChannel.setStreamHandler(null)
+        isScreenshotListening = false
+        unregisterScreenshotCaptureCallback() // safety net if onCancel never fired
         unregisterScreenshotObserver() // safety net if onCancel never fired
         screenshotEventSink = null
         screenRecordingEventChannel.setStreamHandler(null)
@@ -377,9 +443,11 @@ class SecureScreenPrivacyPlugin :
         activity = binding.activity
         reapplyFlagSecureIfNeeded()
         registerScreenRecordingCallbacksIfNeeded()
+        registerScreenshotCaptureCallbackIfNeeded()
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        unregisterScreenshotCaptureCallback() // must run before activity = null below
         unregisterScreenRecordingCallbacks() // must run before activity = null below
         activity = null
     }
@@ -388,9 +456,11 @@ class SecureScreenPrivacyPlugin :
         activity = binding.activity
         reapplyFlagSecureIfNeeded()
         registerScreenRecordingCallbacksIfNeeded()
+        registerScreenshotCaptureCallbackIfNeeded()
     }
 
     override fun onDetachedFromActivity() {
+        unregisterScreenshotCaptureCallback() // must run before activity = null below
         unregisterScreenRecordingCallbacks() // must run before activity = null below
         activity = null
     }
@@ -447,6 +517,48 @@ internal fun shouldEmitScreenshotEvent(
     // determine, fail open.
     return true
 }
+
+// Which Android screenshot detection mechanism to use at a given SDK level.
+// Pure (same reasoning as shouldEmitScreenshotEvent) so it's unit-testable.
+internal enum class ScreenshotDetectionPath {
+    ACTIVITY_SCREEN_CAPTURE_CALLBACK, // API 34+: exact OS signal, this app's visible Activity only
+    MEDIA_STORE_OBSERVER // < API 34: heuristic MediaStore ContentObserver
+}
+
+internal fun screenshotDetectionPathForSdkInt(sdkInt: Int): ScreenshotDetectionPath =
+    if (sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK
+    } else {
+        ScreenshotDetectionPath.MEDIA_STORE_OBSERVER
+    }
+
+// Collapses the burst of MediaStore notifications a single screenshot
+// produces (pending insert, then update once written, sometimes more) into
+// one event: after an emit, anything within windowMillis is dropped. Two
+// genuine screenshots inside that window are reported once - an accepted
+// trade-off, since the OS itself can't take them much faster. Framework-free
+// so it's unit-testable; only touched from the observer's HandlerThread.
+internal class ScreenshotEventDeduper(private val windowMillis: Long = 1_500L) {
+    private var lastEmittedMillis: Long? = null
+
+    fun shouldEmit(nowMillis: Long): Boolean {
+        val last = lastEmittedMillis
+        if (last != null && nowMillis >= last && nowMillis - last < windowMillis) return false
+        lastEmittedMillis = nowMillis
+        return true
+    }
+
+    fun reset() {
+        lastEmittedMillis = null
+    }
+}
+
+// ContentObserver change flags (API 30+): a delete is never a new
+// screenshot, so skip it. flags == 0 (older APIs / unknown) is checked.
+// ContentResolver.NOTIFY_DELETE is a compile-time Int constant, inlined.
+@Suppress("NewApi", "InlinedApi")
+internal fun isMediaStoreChangeWorthChecking(flags: Int): Boolean =
+    (flags and ContentResolver.NOTIFY_DELETE) == 0
 
 // Which Android screen-recording detection API is available at a given SDK
 // level. Extracted as a pure function (same reasoning as
