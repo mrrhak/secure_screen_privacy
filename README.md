@@ -23,6 +23,11 @@ final isEnabled = await privacy.isCaptureProtectionEnabled();
 > recording — not a plugin bug. Pair it with `enableAppSwitcherProtection`
 > below if you want something other than plain black shown there.
 
+> **iPad multi-window:** if your app supports multiple windows
+> (`UIApplicationSupportsMultipleScenes`), each window runs its own Flutter
+> engine, and protection applies to the window whose code called
+> `enableCaptureProtection`. Enable it in each window that needs it.
+
 ### App switcher protection
 
 ```dart
