@@ -9,6 +9,7 @@
 * Add `enableCaptureProtection`/`disableCaptureProtection`/`isCaptureProtectionEnabled` to block screenshots and screen recording.
 * Add `enableAppSwitcherProtection`/`disableAppSwitcherProtection`/`isAppSwitcherProtectionEnabled` with `AppSwitcherProtectionMode` (blur/image/color) to customize the OS app switcher/recents preview.
 * Add `SecureScreenPrivacyNavigatorObserver` + `SecureRouteConfig` to apply capture protection and/or app switcher protection per route.
+* `SecureScreenPrivacyNavigatorObserver` can now protect dialogs and bottom sheets: a popup route whose name has an entry in `policies` gets that policy, and closing it applies the policy of whatever is under it again. Unnamed or unlisted popups (menus, dropdowns) are still ignored.
 * Add `screenshotEvents` stream (with `ScreenshotEvent`) to detect screenshots: subscribing starts native detection, cancelling stops it.
 * Add `screenRecordingEvents` stream (with `ScreenRecordingEvent`) to detect screen recording/mirroring start and stop: subscribing starts native detection, cancelling stops it.
 * Simplify Android app switcher protection to a `FLAG_SECURE`-only toggle (kept on for the entire enabled lifetime, regardless of `AppSwitcherProtectionMode`), since no overlay/blur rendering technique protects Android's live gesture-nav "swipe up and hold" recents peek. iOS is unchanged and keeps all four `AppSwitcherProtectionMode` renderings.
