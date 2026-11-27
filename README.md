@@ -65,26 +65,11 @@ final isEnabled = await privacy.isAppSwitcherProtectionEnabled();
 `blurIntensity` has four levels — `ultraLight` (default), `light`, `medium`,
 `heavy` — mapped on iOS to increasingly opaque `UIBlurEffect` materials.
 
-> **Platform difference:** `mode` and the styling parameters above
-> (`blurIntensity`/`color`/`imageBackgroundColor`) are **iOS-only**. On
-> Android, `enableAppSwitcherProtection` always relies solely on
-> `FLAG_SECURE` for the entire time protection is enabled, showing a plain
-> black/secure card in the app switcher regardless of `mode` — no custom
-> overlay is rendered there. This is deliberate, not a missing feature: on
-> Android, none of a custom overlay view, `RenderEffect` blur, or
-> `PixelCopy`-based capture protects the live gesture-nav "swipe up and
-> hold" recents peek (the OS composites the app's actual on-screen window
-> directly during that gesture, which isn't a capture/cast/recording at
-> all), so `FLAG_SECURE` alone already provides the maximum protection
-> Android allows, and a custom overlay would only add implementation cost
-> with no additional coverage. `mode` is still required (and still selects
-> real behavior) on iOS, whose secure-window mechanism doesn't have this
-> gesture-peek gap.
-
 Shows a blur, a static image (optionally over a blurred backdrop), or a
 solid color in the iOS App Switcher preview instead of your live UI
 whenever the app is backgrounded (Android always shows a plain
-black/secure card instead, per the note above).
+black card instead, see
+[Android: always a plain black card](#android-always-a-plain-black-card)).
 
 `AppSwitcherProtectionMode.image` and `AppSwitcherProtectionMode.imageBlur`
 require the host app to bundle an image set named `SecureScreenPrivacyImage`
@@ -113,6 +98,32 @@ overlay.
 > That hook also fires on transient interruptions (incoming call, Siri,
 > Control Center, share sheet), so the overlay will briefly flash in those
 > cases too — this is inherent to the technique, not a bug.
+
+#### Android: always a plain black card
+
+On Android the App Switcher always shows a **plain black card** while
+protection is on. `mode`, `blurIntensity`, `color` and
+`imageBackgroundColor` only change the look **on iOS**. Android accepts them,
+so the same Dart code runs on both platforms, but ignores them.
+
+<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain black card for the protected app">
+
+This is deliberate, not a missing feature or a bug:
+
+- Protection on Android uses `FLAG_SECURE`, and Android blacks out the App
+  Switcher picture of a `FLAG_SECURE` window. A custom color or image would
+  only show if `FLAG_SECURE` were off, which would also let screenshots
+  through.
+- A blur never makes it into the App Switcher picture: Android takes the
+  picture before a blur can finish drawing.
+- No app-level technique (a custom cover, a `RenderEffect` blur,
+  `PixelCopy`, or `FLAG_SECURE` itself) hides the live "swipe up and hold"
+  peek with gesture navigation. During that gesture Android shows the app's
+  real screen directly. This is a known Android limit.
+
+So `FLAG_SECURE` alone already gives the most protection Android allows, and
+the black card is what users see from banking and password apps too. `mode`
+is still required, and still matters, on iOS.
 
 ### Per-route protection
 
