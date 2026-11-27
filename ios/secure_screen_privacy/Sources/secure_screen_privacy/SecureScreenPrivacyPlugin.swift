@@ -225,12 +225,18 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     attachedWindow = window
   }
 
+  // The requested state is always recorded, even when no window can be
+  // attached yet (e.g. a call made during cold launch, before any scene is
+  // foregroundActive): handleDidBecomeActive() attaches the window and
+  // applies it once the app becomes active. Dropping the request instead
+  // would leave the screen unprotected with no later retry.
   @discardableResult
   private func setCaptureProtection(_ enabled: Bool) -> Bool {
-    attachWindowIfNeeded()
-    guard attachedWindow != nil else { return false }
-    screenPreventField.isSecureTextEntry = enabled
     isCaptureProtectionEnabled = enabled
+    attachWindowIfNeeded()
+    if attachedWindow != nil {
+      screenPreventField.isSecureTextEntry = enabled
+    }
     return true
   }
 
