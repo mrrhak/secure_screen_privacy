@@ -145,6 +145,14 @@ When it closes, the policy of whatever is under it applies again.
 `showDialog` and `showModalBottomSheet` use the root `Navigator` by default,
 so the observer must be on that `Navigator` (as in `MaterialApp` above).
 
+**Nested navigators** (tabs, shell routes, a `Navigator` inside a page):
+give each `Navigator` its own observer, and they work together. Protection
+is on when any showing navigator's current route wants it, and the app
+switcher mode comes from the innermost one that sets a mode. A nested
+navigator stops counting once the page holding it is covered by another
+page or popped. Tabs kept alive side by side all count, so a protected route
+on a hidden tab keeps protection on until that tab navigates.
+
 ### Screenshot detection
 
 Get notified when the user takes a screenshot:

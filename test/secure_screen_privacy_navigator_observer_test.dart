@@ -183,6 +183,39 @@ class _FakePopupRoute extends PopupRoute<void> {
   ) => const SizedBox();
 }
 
+
+/// A root Navigator showing [rootPage], whose page holds a nested Navigator
+/// that starts on [nestedPage]; each Navigator has its own observer.
+Future<(NavigatorState, NavigatorState)> _pumpNested(
+  WidgetTester tester, {
+  required SecureScreenPrivacyNavigatorObserver rootObserver,
+  required SecureScreenPrivacyNavigatorObserver nestedObserver,
+  String rootPage = '/shell',
+  String nestedPage = '/payment',
+}) async {
+  final rootKey = GlobalKey<NavigatorState>();
+  final nestedKey = GlobalKey<NavigatorState>();
+  await tester.pumpWidget(
+    Directionality(
+      textDirection: TextDirection.ltr,
+      child: Navigator(
+        key: rootKey,
+        observers: [rootObserver],
+        onGenerateRoute: (_) => PageRouteBuilder<void>(
+          settings: RouteSettings(name: rootPage),
+          pageBuilder: (_, _, _) => Navigator(
+            key: nestedKey,
+            observers: [nestedObserver],
+            onGenerateRoute: (_) => _fakeRoute(nestedPage),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return (rootKey.currentState!, nestedKey.currentState!);
+}
+
 void main() {
   late _RecordingPlatform fakePlatform;
   late SecureScreenPrivacyPlatform originalPlatform;
@@ -669,6 +702,137 @@ void main() {
         expect(fakePlatform.calls, [
           'enableCaptureProtection',
           'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    testWidgets(
+      'nested navigators: a protected nested route turns protection on even though the outer page does not',
+      (tester) async {
+        final rootObserver = SecureScreenPrivacyNavigatorObserver();
+        final nestedObserver = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        await _pumpNested(
+          tester,
+          rootObserver: rootObserver,
+          nestedObserver: nestedObserver,
+        );
+
+        expect(fakePlatform.calls.sublist(fakePlatform.calls.length - 2), [
+          'enableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    testWidgets(
+      'nested navigators: coming back to the outer page keeps the nested route protected',
+      (tester) async {
+        final rootObserver = SecureScreenPrivacyNavigatorObserver();
+        final nestedObserver = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final (root, _) = await _pumpNested(
+          tester,
+          rootObserver: rootObserver,
+          nestedObserver: nestedObserver,
+        );
+
+        // A full page on the root covers the nested navigator: off.
+        root.push(_fakeRoute('/settings'));
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls.sublist(fakePlatform.calls.length - 2), [
+          'disableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+        fakePlatform.calls.clear();
+
+        // Popping it shows the nested /payment again: on. Before, the root
+        // observer applied its own page's policy alone and turned it off.
+        root.pop();
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls, [
+          'enableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    testWidgets(
+      'nested navigators: popping the outer page that holds them drops their policy',
+      (tester) async {
+        final rootKey = GlobalKey<NavigatorState>();
+        final nestedObserver = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Navigator(
+              key: rootKey,
+              observers: [SecureScreenPrivacyNavigatorObserver()],
+              onGenerateRoute: (_) => _fakeRoute('/home'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        rootKey.currentState!.push(
+          PageRouteBuilder<void>(
+            settings: const RouteSettings(name: '/shell'),
+            pageBuilder: (_, _, _) => Navigator(
+              observers: [nestedObserver],
+              onGenerateRoute: (_) => _fakeRoute('/payment'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls, contains('enableCaptureProtection'));
+        fakePlatform.calls.clear();
+
+        rootKey.currentState!.pop();
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls, [
+          'disableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    testWidgets(
+      'nested navigators: the innermost app switcher mode wins, capture protection from any',
+      (tester) async {
+        final rootObserver = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/shell': const SecureRouteConfig(
+              captureProtection: true,
+              appSwitcherMode: AppSwitcherProtectionMode.color,
+            ),
+          },
+        );
+        final nestedObserver = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(
+              appSwitcherMode: AppSwitcherProtectionMode.blur,
+              blurIntensity: BlurIntensity.heavy,
+            ),
+          },
+        );
+        await _pumpNested(
+          tester,
+          rootObserver: rootObserver,
+          nestedObserver: nestedObserver,
+        );
+
+        expect(fakePlatform.calls.sublist(fakePlatform.calls.length - 2), [
+          'enableCaptureProtection',
+          'enableAppSwitcherProtection(AppSwitcherProtectionMode.blur, BlurIntensity.heavy, 4278190080, 4278190080)',
         ]);
       },
     );
