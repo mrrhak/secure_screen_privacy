@@ -110,6 +110,7 @@ class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     final index = oldRoute == null ? -1 : _trackedRoutes.indexOf(oldRoute);
+    final wasTop = index >= 0 && index == _trackedRoutes.length - 1;
     final newIsTracked = newRoute != null && _isTracked(newRoute);
     if (index >= 0) {
       if (newIsTracked) {
@@ -120,16 +121,41 @@ class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
     } else if (newIsTracked) {
       _trackedRoutes.add(newRoute);
     }
-    if (!newIsTracked) return;
-    _applyPolicyForRoute(newRoute);
+    if (wasTop) {
+      // The top page or popup was swapped: apply whatever is on top now,
+      // which is the page under it when the new route is an ignored popup.
+      // Before, a protected popup replaced by an ignored one kept its
+      // protection on.
+      _applyTopTrackedRoute();
+    } else if (index < 0 &&
+        newIsTracked &&
+        (newRoute.navigator == null || newRoute.isCurrent)) {
+      _applyPolicyForRoute(newRoute);
+    }
+    // Otherwise a route below the top was swapped: what shows is unchanged.
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (!_isTracked(route)) return;
-    _trackedRoutes.remove(route);
-    _applyPolicyForRoute(_visibleRoute(previousRoute));
+    final index = _trackedRoutes.indexOf(route);
+    if (index < 0) {
+      // Never seen by this observer: go by the route Flutter reports.
+      _applyPolicyForRoute(_visibleRoute(previousRoute));
+      return;
+    }
+    final wasTop = index == _trackedRoutes.length - 1;
+    _trackedRoutes.removeAt(index);
+    // previousRoute is the route that was *under* the removed one, not the
+    // one on top. Applying it turned protection off after
+    // pushAndRemoveUntil to a protected page (the new page is pushed first,
+    // then the old ones are removed) or after removeRoute took out a page
+    // under a protected one. Only removing the top changes what shows.
+    if (wasTop) _applyTopTrackedRoute();
   }
+
+  void _applyTopTrackedRoute() =>
+      _applyPolicyForRoute(_trackedRoutes.isEmpty ? null : _trackedRoutes.last);
 
   // The route whose policy should apply once [revealed] is on top: itself if
   // this observer tracks it, otherwise (an ignored popup) the top-most
