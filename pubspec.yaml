@@ -5,8 +5,8 @@ repository: https://github.com/mrrhak/secure_screen_privacy
 issue_tracker: https://github.com/mrrhak/secure_screen_privacy/issues
 
 environment:
-  sdk: ^3.12.2
-  flutter: '>=3.3.0'
+  sdk: ^3.10.0
+  flutter: '>=3.38.0'
 
 dependencies:
   flutter:

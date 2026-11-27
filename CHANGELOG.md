@@ -1,6 +1,7 @@
 ## 0.0.1
 
 * Initial release.
+* Fix the package's version limits: it said Flutter 3.3 or newer, but the iOS code needs Flutter 3.38 (scene lifecycle API), so older Flutter versions failed to build on iOS. It now needs Flutter 3.38+ and Dart 3.10+ (was Dart 3.12.2+, which shut out several Flutter releases the plugin works on).
 * Fix iOS capture protection on iPad multi-window: each window runs its own Flutter engine and plugin instance, but every instance protected whichever window was active, so one window could be left open to screenshots and recording. Each instance now protects its own engine's window (`registrar.viewController?.view.window`), falling back to the active window only until that window exists.
 * Add `ScreenRecordingState` (`recording`/`notRecording`/`unknown`) and `ScreenRecordingEvent.state`. Android 14 (API 34) and below, which can't detect screen recording, now send one `unknown` event on subscribe instead of nothing, so apps can tell "can't detect" from "not recording". `isRecording` is now a getter (true only for `recording`); the constructor takes a `ScreenRecordingState`.
 * Fix iOS `disableCaptureProtection` moving the app's window under the secure text field even though protection was off. With `SecureScreenPrivacyNavigatorObserver` this happened at startup in every app, since the first route disables protection. Only enabling does it now.
