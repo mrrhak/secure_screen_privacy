@@ -250,10 +250,17 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // foregroundActive): handleDidBecomeActive() attaches the window and
   // applies it once the app becomes active. Dropping the request instead
   // would leave the screen unprotected with no later retry.
+  //
+  // Only enabling moves the window under the secure field. Disabling used to
+  // do it too, so every app using SecureScreenPrivacyNavigatorObserver had
+  // its window moved at startup (the first route disables protection) even
+  // if no route ever turned it on.
   @discardableResult
   private func setCaptureProtection(_ enabled: Bool) -> Bool {
     isCaptureProtectionEnabled = enabled
-    attachWindowIfNeeded()
+    if enabled {
+      attachWindowIfNeeded()
+    }
     if attachedWindow != nil {
       screenPreventField.isSecureTextEntry = enabled
     }
@@ -543,6 +550,10 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   }
 
   // Test-only view of which windows currently carry an overlay.
+  var isWindowAttachedToSecureField: Bool {
+    attachedWindow != nil
+  }
+
   func hasOverlay(on window: UIWindow) -> Bool {
     overlays.object(forKey: window) != nil
   }
