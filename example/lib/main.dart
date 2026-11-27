@@ -1,20 +1,18 @@
 import 'package:material_ui/material_ui.dart';
-import 'dart:async';
-
-import 'package:flutter/services.dart';
 import 'package:secure_screen_privacy/secure_screen_privacy.dart';
-import 'package:share_plus/share_plus.dart';
+
+import 'src/background.dart';
+import 'src/detect_tab.dart';
+import 'src/protect_tab.dart';
+import 'src/routes_tab.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-/// Route names demoed by [SecureScreenPrivacyNavigatorObserver] below. Each
-/// one gets a different, automatically-applied protection policy purely from
-/// being navigated to - no manual enable/disable calls needed on these pages.
-const _paymentRoute = '/payment';
-const _profileRoute = '/profile';
-const _walletRoute = '/wallet';
+/// Lets the home screen notice when a demo route closes, so the Protect tab
+/// can read back the state the route policy left behind.
+final _routeObserver = RouteObserver<ModalRoute<void>>();
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -22,587 +20,145 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Secure Screen Privacy',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorSchemeSeed: const Color(0xFF5B4BDB),
+        useMaterial3: true,
+      ),
       navigatorObservers: [
-        SecureScreenPrivacyNavigatorObserver(
-          policies: {
-            // Block screenshots/recording only.
-            _paymentRoute: const SecureRouteConfig(captureProtection: true),
-            // Hide in the app switcher only.
-            _profileRoute: const SecureRouteConfig(
-              appSwitcherMode: AppSwitcherProtectionMode.blur,
-            ),
-            // Both at once.
-            _walletRoute: const SecureRouteConfig(
-              captureProtection: true,
-              appSwitcherMode: AppSwitcherProtectionMode.imageBlur,
-            ),
-          },
-          // Every other route (including this demo's home screen) is left
-          // fully unprotected so the manual toggles below aren't fought.
-        ),
+        SecureScreenPrivacyNavigatorObserver(policies: routePolicies),
+        _routeObserver,
       ],
       initialRoute: '/',
       routes: {
-        '/': (context) => const _HomeScreen(),
-        _paymentRoute: (context) => const _RouteDemoScreen(
+        '/': (context) => const HomeScreen(),
+        DemoRoutes.payment: (context) => const RouteDemoPage(
           title: 'Payment',
-          description:
-              'captureProtection: true\n\n'
-              'Screenshots and screen recording are blocked for as long as '
-              "you're on this route - applied automatically by "
-              'SecureScreenPrivacyNavigatorObserver, no manual toggle needed.',
+          route: DemoRoutes.payment,
+          explanation:
+              'Screenshots and screen recording are blocked while this page '
+              'is open. Go back and they work again.',
         ),
-        _profileRoute: (context) => const _RouteDemoScreen(
+        DemoRoutes.profile: (context) => const RouteDemoPage(
           title: 'Profile',
-          description:
-              'appSwitcherMode: AppSwitcherProtectionMode.blur\n\n'
-              'In-app screenshots are still allowed, but this route shows a '
-              'blurred overlay in the OS app switcher/recents preview.',
+          route: DemoRoutes.profile,
+          explanation:
+              'Screenshots still work here, but the App Switcher shows a '
+              'heavy blur instead of this page (iOS) or a blank card '
+              '(Android).',
         ),
-        _walletRoute: (context) => const _RouteDemoScreen(
+        DemoRoutes.wallet: (context) => const RouteDemoPage(
           title: 'Wallet',
-          description:
-              'captureProtection: true + '
-              'appSwitcherMode: AppSwitcherProtectionMode.color\n\n'
-              'Both protections are applied together on this route.',
+          route: DemoRoutes.wallet,
+          explanation:
+              'Both at once: screenshots are blocked and the App Switcher '
+              'shows the image over a blur (iOS).',
         ),
       },
     );
   }
 }
 
-class _HomeScreen extends StatefulWidget {
-  const _HomeScreen();
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<_HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<_HomeScreen> {
-  String _platformVersion = 'Unknown';
-  bool _isCaptureProtectionEnabled = false;
-  bool _isAppSwitcherProtectionEnabled = false;
-  AppSwitcherProtectionMode _appSwitcherMode = AppSwitcherProtectionMode.blur;
-  BlurIntensity _blurIntensity = BlurIntensity.ultraLight;
-  Color _overlayColor = Colors.black;
-  Color _imageBackgroundColor = Colors.black;
-  final _secureScreenPrivacyPlugin = SecureScreenPrivacy();
-
-  bool get _isListeningForScreenshots => _screenshotSubscription != null;
-  StreamSubscription<ScreenshotEvent>? _screenshotSubscription;
-  final List<DateTime> _screenshotTimestamps = [];
-
-  bool get _isListeningForScreenRecording =>
-      _screenRecordingSubscription != null;
-  StreamSubscription<ScreenRecordingEvent>? _screenRecordingSubscription;
-  ScreenRecordingState? _recordingState;
-  final List<ScreenRecordingEvent> _screenRecordingEventLog = [];
-
-  static const _colorSwatches = [
-    Colors.black,
-    Colors.indigo,
-    Colors.teal,
-    Colors.deepOrange,
-  ];
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
+  final _plugin = SecureScreenPrivacy();
+  final _protectKey = GlobalKey<ProtectTabState>();
+  int _tab = 0;
+  String _platform = '';
 
   @override
   void initState() {
     super.initState();
-    initPlatformState();
-    _syncCaptureProtectionState();
-    _syncAppSwitcherProtectionState();
+    _plugin
+        .getPlatformVersion()
+        .then((version) {
+          if (mounted) setState(() => _platform = version ?? '');
+        })
+        .catchError((_) {});
   }
 
-  // Platform messages are asynchronous, so we initialize in an async method.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) _routeObserver.subscribe(this, route);
+  }
+
   @override
   void dispose() {
-    _screenshotSubscription?.cancel();
-    _screenRecordingSubscription?.cancel();
+    _routeObserver.unsubscribe(this);
     super.dispose();
   }
 
-  Future<void> initPlatformState() async {
-    String platformVersion;
-    // Platform messages may fail, so we use a try/catch PlatformException.
-    // We also handle the message potentially returning null.
-    try {
-      platformVersion =
-          await _secureScreenPrivacyPlugin.getPlatformVersion() ??
-          'Unknown platform version';
-    } on PlatformException {
-      platformVersion = 'Failed to get platform version.';
-    }
-
-    // If the widget was removed from the tree while the asynchronous platform
-    // message was in flight, we want to discard the reply rather than calling
-    // setState to update our non-existent appearance.
-    if (!mounted) return;
-
-    setState(() {
-      _platformVersion = platformVersion;
-    });
-  }
-
-  // The native side keeps its own protection state independently of Dart's
-  // (e.g. across a Dart hot restart, which resets this widget's state but not
-  // the still-running native process), so resync on startup rather than
-  // assuming protection starts disabled.
-  Future<void> _syncCaptureProtectionState() async {
-    bool isEnabled;
-    try {
-      isEnabled = await _secureScreenPrivacyPlugin.isCaptureProtectionEnabled();
-    } on PlatformException {
-      isEnabled = false;
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _isCaptureProtectionEnabled = isEnabled;
-    });
-  }
-
-  Future<void> _syncAppSwitcherProtectionState() async {
-    bool isEnabled;
-    try {
-      isEnabled = await _secureScreenPrivacyPlugin
-          .isAppSwitcherProtectionEnabled();
-    } on PlatformException {
-      isEnabled = false;
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _isAppSwitcherProtectionEnabled = isEnabled;
-    });
-  }
-
-  Future<void> _toggleCaptureProtection(bool enable) async {
-    bool result;
-    try {
-      result = enable
-          ? await _secureScreenPrivacyPlugin.enableCaptureProtection()
-          : await _secureScreenPrivacyPlugin.disableCaptureProtection();
-    } on PlatformException {
-      result = false;
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _isCaptureProtectionEnabled = enable && result;
-    });
-  }
-
-  Future<void> _toggleAppSwitcherProtection(bool enable) async {
-    bool result;
-    try {
-      result = enable
-          ? await _secureScreenPrivacyPlugin.enableAppSwitcherProtection(
-              _appSwitcherMode,
-              blurIntensity: _blurIntensity,
-              color: _overlayColor.toARGB32(),
-              imageBackgroundColor: _imageBackgroundColor.toARGB32(),
-            )
-          : await _secureScreenPrivacyPlugin.disableAppSwitcherProtection();
-    } on PlatformException {
-      result = false;
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _isAppSwitcherProtectionEnabled = enable && result;
-    });
-  }
-
-  // A native screen presented over the app (UIActivityViewController on
-  // iOS), for checking the App Switcher cover also hides presented screens.
-  // iPad shows the sheet as a popover, which needs an anchor: the button.
-  Future<void> _openShareSheet(BuildContext buttonContext) async {
-    final box = buttonContext.findRenderObject() as RenderBox?;
-    await SharePlus.instance.share(
-      ShareParams(
-        text: 'secure_screen_privacy example',
-        sharePositionOrigin: box == null
-            ? null
-            : box.localToGlobal(Offset.zero) & box.size,
-      ),
+  @override
+  void didPopNext() {
+    // The route policy for this screen is applied just after the pop.
+    Future<void>.delayed(
+      const Duration(milliseconds: 400),
+      () => _protectKey.currentState?.syncFromNative(),
     );
   }
 
-  // Subscribing to the stream IS starting native screenshot detection;
-  // cancelling IS stopping it - there's no separate start/stop method.
-  void _toggleScreenshotListening(bool listen) {
-    if (listen) {
-      _screenshotSubscription = _secureScreenPrivacyPlugin.screenshotEvents
-          .listen((event) {
-            if (!mounted) return;
-            setState(() {
-              _screenshotTimestamps.insert(0, event.timestamp);
-              if (_screenshotTimestamps.length > 5) {
-                _screenshotTimestamps.removeLast();
-              }
-            });
-          });
-    } else {
-      _screenshotSubscription?.cancel();
-      _screenshotSubscription = null;
-    }
-    setState(() {});
-  }
-
-  // Subscribing to the stream IS starting native recording detection;
-  // cancelling IS stopping it - there's no separate start/stop method. On
-  // Android it needs Android 15 (API 35) or newer; older versions emit
-  // nothing.
-  void _toggleScreenRecordingListening(bool listen) {
-    if (listen) {
-      _screenRecordingSubscription = _secureScreenPrivacyPlugin
-          .screenRecordingEvents
-          .listen((event) {
-            if (!mounted) return;
-            setState(() {
-              _recordingState = event.state;
-              _screenRecordingEventLog.insert(0, event);
-              if (_screenRecordingEventLog.length > 5) {
-                _screenRecordingEventLog.removeLast();
-              }
-            });
-          });
-    } else {
-      _screenRecordingSubscription?.cancel();
-      _screenRecordingSubscription = null;
-      _recordingState = null;
-    }
-    setState(() {});
-  }
-
-  // Re-applies the app switcher overlay with the latest mode/intensity/color
-  // whenever one of them changes while protection is already enabled.
-  Future<void> _reapplyAppSwitcherProtectionIfEnabled() async {
-    if (!_isAppSwitcherProtectionEnabled) return;
-    try {
-      await _secureScreenPrivacyPlugin.enableAppSwitcherProtection(
-        _appSwitcherMode,
-        blurIntensity: _blurIntensity,
-        color: _overlayColor.toARGB32(),
-        imageBackgroundColor: _imageBackgroundColor.toARGB32(),
-      );
-    } on PlatformException {
-      // Ignore; the switch will reflect the last-known state on next sync.
-    }
-  }
+  static const _titles = ['Protect', 'Detect', 'Routes'];
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Plugin example app')),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Running on: $_platformVersion\n'),
-              SwitchListTile(
-                title: const Text('Block screenshots & screen recording'),
-                value: _isCaptureProtectionEnabled,
-                onChanged: _toggleCaptureProtection,
-              ),
-              const Divider(),
-              SwitchListTile(
-                title: const Text('Hide content in app switcher'),
-                value: _isAppSwitcherProtectionEnabled,
-                onChanged: _toggleAppSwitcherProtection,
-              ),
+    return ColorfulBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          title: Text(_titles[_tab]),
+          actions: [
+            if (_platform.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DropdownButtonFormField<AppSwitcherProtectionMode>(
-                  decoration: const InputDecoration(
-                    labelText: 'App Switcher Mode',
-                    border: OutlineInputBorder(),
-                  ),
-                  initialValue: _appSwitcherMode,
-                  items: const [
-                    DropdownMenuItem(
-                      value: AppSwitcherProtectionMode.blur,
-                      child: Text('Blur'),
-                    ),
-                    DropdownMenuItem(
-                      value: AppSwitcherProtectionMode.image,
-                      child: Text('Image'),
-                    ),
-                    DropdownMenuItem(
-                      value: AppSwitcherProtectionMode.color,
-                      child: Text('Color'),
-                    ),
-                    DropdownMenuItem(
-                      value: AppSwitcherProtectionMode.imageBlur,
-                      child: Text('Image+Blur'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _appSwitcherMode = value;
-                    });
-                    _reapplyAppSwitcherProtectionIfEnabled();
-                  },
+                padding: const EdgeInsets.only(right: 12),
+                child: Chip(
+                  avatar: const Icon(Icons.phone_iphone, size: 16),
+                  label: Text(_platform),
+                  visualDensity: VisualDensity.compact,
                 ),
               ),
-              if (_appSwitcherMode == AppSwitcherProtectionMode.blur ||
-                  _appSwitcherMode == AppSwitcherProtectionMode.imageBlur)
-                Padding(
-                  padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
-                  child: DropdownButtonFormField<BlurIntensity>(
-                    decoration: const InputDecoration(
-                      labelText: 'Blur Intensity',
-                      border: OutlineInputBorder(),
-                    ),
-                    initialValue: _blurIntensity,
-                    items: const [
-                      DropdownMenuItem(
-                        value: BlurIntensity.ultraLight,
-                        child: Text('Ultra light'),
-                      ),
-                      DropdownMenuItem(
-                        value: BlurIntensity.light,
-                        child: Text('Light'),
-                      ),
-                      DropdownMenuItem(
-                        value: BlurIntensity.medium,
-                        child: Text('Medium'),
-                      ),
-                      DropdownMenuItem(
-                        value: BlurIntensity.heavy,
-                        child: Text('Heavy'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        _blurIntensity = value;
-                      });
-                      _reapplyAppSwitcherProtectionIfEnabled();
-                    },
-                  ),
-                ),
-              if (_appSwitcherMode == AppSwitcherProtectionMode.color)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: _ColorSwatchPicker(
-                    colors: _colorSwatches,
-                    selected: _overlayColor,
-                    onSelected: (color) {
-                      setState(() {
-                        _overlayColor = color;
-                      });
-                      _reapplyAppSwitcherProtectionIfEnabled();
-                    },
-                  ),
-                ),
-              if (_appSwitcherMode == AppSwitcherProtectionMode.image ||
-                  _appSwitcherMode == AppSwitcherProtectionMode.imageBlur)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'Image modes show the "SecureScreenPrivacyImage" asset (iOS) '
-                    'bundled in the host app. Without it, image falls back to the '
-                    'background color and imageBlur to a plain blur.',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              if (_appSwitcherMode == AppSwitcherProtectionMode.image) ...[
-                const Text('Background color'),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: _ColorSwatchPicker(
-                    colors: _colorSwatches,
-                    selected: _imageBackgroundColor,
-                    onSelected: (color) {
-                      setState(() {
-                        _imageBackgroundColor = color;
-                      });
-                      _reapplyAppSwitcherProtectionIfEnabled();
-                    },
-                  ),
-                ),
-              ],
-              const Divider(),
-              SwitchListTile(
-                title: const Text('Listen for screenshots'),
-                value: _isListeningForScreenshots,
-                onChanged: _toggleScreenshotListening,
-              ),
-              if (_screenshotTimestamps.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final timestamp in _screenshotTimestamps)
-                        Text(
-                          'Screenshot detected: ${timestamp.toIso8601String()}',
-                        ),
-                    ],
-                  ),
-                ),
-              const Divider(),
-              SwitchListTile(
-                title: const Text('Listen for screen recording'),
-                subtitle: Text(
-                  _isListeningForScreenRecording
-                      ? switch (_recordingState) {
-                          ScreenRecordingState.recording => 'Recording active',
-                          ScreenRecordingState.notRecording => 'Not recording',
-                          ScreenRecordingState.unknown =>
-                            "Unknown (this device can't detect recording)",
-                          null => 'Waiting for state',
-                        }
-                      : 'Off',
-                ),
-                value: _isListeningForScreenRecording,
-                onChanged: _toggleScreenRecordingListening,
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Text(
-                  'On Android this needs Android 15 (API 35) or newer.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              if (_screenRecordingEventLog.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final event in _screenRecordingEventLog)
-                        Text(
-                          '${switch (event.state) {
-                            ScreenRecordingState.recording => "Started",
-                            ScreenRecordingState.notRecording => "Stopped",
-                            ScreenRecordingState.unknown => "Unknown",
-                          }}: '
-                          '${event.timestamp.toIso8601String()}',
-                        ),
-                    ],
-                  ),
-                ),
-              const Divider(),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'SecureScreenPrivacyNavigatorObserver demo\n'
-                  '(protection is applied automatically per route below)',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pushNamed(context, _paymentRoute),
-                child: const Text('Payment (capture protection)'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pushNamed(context, _profileRoute),
-                child: const Text('Profile (app switcher blur)'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pushNamed(context, _walletRoute),
-                child: const Text('Wallet (both)'),
-              ),
-              const Divider(height: 32),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Opens the system share sheet on top of the app. With '
-                  '"Hide content in app switcher" on, open the App Switcher '
-                  'while it is showing: the share sheet must be covered too.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              Builder(
-                builder: (buttonContext) => ElevatedButton.icon(
-                  onPressed: () => _openShareSheet(buttonContext),
-                  icon: const Icon(Icons.ios_share),
-                  label: const Text('Open share sheet'),
-                ),
-              ),
-              SizedBox(height: 24),
-              Image.network(
-                'https://c4.wallpaperflare.com/wallpaper/860/881/255/amoled-dragon-phone-iphone-vertical-hd-wallpaper-preview.jpg',
-                // Offline (or in widget tests, where every HTTP request gets
-                // a 400) the image just doesn't show instead of throwing.
-                errorBuilder: (context, error, stackTrace) =>
-                    const SizedBox.shrink(),
-              ),
-            ],
-          ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-/// A page used to demo [SecureScreenPrivacyNavigatorObserver]: its
-/// protection policy comes entirely from the route name it's pushed under,
-/// not from anything on this widget.
-class _RouteDemoScreen extends StatelessWidget {
-  const _RouteDemoScreen({required this.title, required this.description});
-
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(description, textAlign: TextAlign.center),
+        body: IndexedStack(
+          index: _tab,
+          children: [
+            ProtectTab(key: _protectKey, plugin: _plugin),
+            DetectTab(plugin: _plugin),
+            const RoutesTab(),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _ColorSwatchPicker extends StatelessWidget {
-  const _ColorSwatchPicker({
-    required this.colors,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<Color> colors;
-  final Color selected;
-  final ValueChanged<Color> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      children: colors.map((color) {
-        final isSelected = color.toARGB32() == selected.toARGB32();
-        return GestureDetector(
-          onTap: () => onSelected(color),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isSelected ? Colors.white : Colors.transparent,
-                width: 2,
-              ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (index) => setState(() => _tab = index),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.shield_outlined),
+              selectedIcon: Icon(Icons.shield),
+              label: 'Protect',
             ),
-            child: isSelected
-                ? const Icon(Icons.check, color: Colors.white, size: 18)
-                : null,
-          ),
-        );
-      }).toList(),
+            NavigationDestination(
+              icon: Icon(Icons.notifications_none),
+              selectedIcon: Icon(Icons.notifications_active),
+              label: 'Detect',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.alt_route_outlined),
+              selectedIcon: Icon(Icons.alt_route),
+              label: 'Routes',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
