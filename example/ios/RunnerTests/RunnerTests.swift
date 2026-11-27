@@ -363,6 +363,21 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(events.count, 2)
   }
 
+  func testScreenRecordingStateDeduper_dropsTheSameStateAgain() {
+    var deduper = ScreenRecordingStateDeduper()
+    XCTAssertTrue(deduper.shouldEmit(true))
+    XCTAssertFalse(deduper.shouldEmit(true))
+    XCTAssertTrue(deduper.shouldEmit(false))
+    XCTAssertFalse(deduper.shouldEmit(false))
+  }
+
+  func testScreenRecordingStateDeduper_resetSendsTheSameStateAgain() {
+    var deduper = ScreenRecordingStateDeduper()
+    XCTAssertTrue(deduper.shouldEmit(false))
+    deduper.reset()
+    XCTAssertTrue(deduper.shouldEmit(false))
+  }
+
   private func drainMainQueue() {
     let delivered = expectation(description: "main queue drained")
     DispatchQueue.main.async { delivered.fulfill() }

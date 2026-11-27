@@ -35,6 +35,9 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   var screenshotDeduper = ScreenshotEventDeduper()
   private var screenRecordingEventSink: FlutterEventSink?
   private var isRecordingListening = false
+  // Drops a recording state equal to the last one sent (see
+  // emitScreenRecordingEvent).
+  var screenRecordingStateDeduper = ScreenRecordingStateDeduper()
   // Strong reference: FlutterEventChannel.setStreamHandler does not
   // document that it retains the handler, so this plugin holds it
   // explicitly rather than relying on undocumented retention behavior.
@@ -145,6 +148,8 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   fileprivate func handleRecordingListen(_ events: @escaping FlutterEventSink) {
     screenRecordingEventSink = events
     isRecordingListening = true
+    // A new subscriber always gets the current state first.
+    screenRecordingStateDeduper.reset()
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(handleScreenCapturedChange),
@@ -168,10 +173,17 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
 
   // Apple doesn't document capturedDidChangeNotification as guaranteed
   // main-thread, same reasoning as handleScreenshotTaken's dispatch above.
+  //
+  // Only a change of state is sent: subscribing reports the current state,
+  // and capturedDidChangeNotification is not promised to post only when
+  // isCaptured changes, so the same state could reach Dart twice in a row.
+  // Checked on the main queue, where the deduper is reset, so it is never
+  // touched from two threads.
   private func emitScreenRecordingEvent(_ isRecording: Bool) {
     let millis = Int64(Date().timeIntervalSince1970 * 1000)
     DispatchQueue.main.async { [weak self] in
-      self?.screenRecordingEventSink?(["isRecording": isRecording, "timestamp": millis])
+      guard let self = self, self.screenRecordingStateDeduper.shouldEmit(isRecording) else { return }
+      self.screenRecordingEventSink?(["isRecording": isRecording, "timestamp": millis])
     }
   }
 
@@ -598,6 +610,22 @@ struct ScreenshotEventDeduper {
 
   mutating func reset() {
     lastEmittedAt = nil
+  }
+}
+
+// Lets a screen recording state through only when it differs from the last
+// one sent. Only touched from the main queue.
+struct ScreenRecordingStateDeduper {
+  private var lastState: Bool?
+
+  mutating func shouldEmit(_ state: Bool) -> Bool {
+    if lastState == state { return false }
+    lastState = state
+    return true
+  }
+
+  mutating func reset() {
+    lastState = nil
   }
 }
 
