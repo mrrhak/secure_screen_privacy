@@ -14,11 +14,12 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   private var appSwitcherColor: UIColor = .black
   private var appSwitcherImageBackgroundColor: UIColor = .black
   private var isAppSwitcherProtectionEnabled = false
-  // One overlay per window, keyed weakly by the window it covers: on iPad
-  // multi-window each UIWindowScene resigns/activates independently, so a
-  // single shared overlay slot could cover the wrong window or be removed
-  // from a window that is still in the App Switcher.
-  private let overlays = NSMapTable<UIWindow, UIView>.weakToStrongObjects()
+  // The overlay views covering each window (one per overlay host, see
+  // overlayHosts(in:)), keyed weakly by the window: on iPad multi-window
+  // each UIWindowScene resigns/activates independently, so a single shared
+  // overlay slot could cover the wrong window or be removed from a window
+  // that is still in the App Switcher.
+  private let overlays = NSMapTable<UIWindow, NSArray>.weakToStrongObjects()
   private var screenshotEventSink: FlutterEventSink?
   private var screenRecordingEventSink: FlutterEventSink?
   private var isRecordingListening = false
@@ -252,7 +253,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // task switcher - `didEnterBackground` fires too late for this) shows the
   // overlay instead of live content. If capture protection is on, the secure
   // text field trick would otherwise force a blank snapshot regardless of
-  // the overlay's content, so attachOverlay() disables it - but only once
+  // the overlay's content, so showOverlay() disables it - but only once
   // the overlay is actually attached, immediately for every mode (all four
   // attach synchronously), so there's no gap where the field is off and
   // nothing has replaced it yet. It's restored by
@@ -285,7 +286,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     isAppSwitcherProtectionEnabled = false
     appSwitcherMode = nil
     removeAllOverlays()
-    // Restores what attachOverlay() turned off, in case this is called
+    // Restores what showOverlay() turned off, in case this is called
     // while the overlay is already attached (e.g. app switcher protection
     // explicitly disabled while backgrounded) - without this, capture
     // protection would report enabled but the underlying secure field
@@ -296,14 +297,62 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     return true
   }
 
+  // Covers every overlay host in the window (see overlayHosts(in:)) with
+  // its own overlay view, all attached synchronously in this one call.
   private func showOverlay(mode: String, in window: UIWindow) {
+    var views: [UIView] = []
+    for host in SecureScreenPrivacyPlugin.overlayHosts(in: window) {
+      guard let view = makeOverlayView(mode: mode) else { continue }
+      view.frame = host.bounds
+      view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      host.addSubview(view)
+      views.append(view)
+    }
+    guard !views.isEmpty else { return }
+    overlays.setObject(views as NSArray, forKey: window)
+    // Only safe to disable here: this is the one point the overlay is
+    // guaranteed to already be covering the window, for every mode -
+    // disabling it any earlier (e.g. in handleWillResignActive) would leave
+    // a window where the secure field is off but nothing has replaced it
+    // yet. Only for the window the secure field actually protects: on iPad
+    // multi-window, covering some other scene's window must not switch off
+    // capture protection for a window that may still be live.
+    if isCaptureProtectionEnabled, window === attachedWindow {
+      screenPreventField.isSecureTextEntry = false
+    }
+  }
+
+  // The views to put an overlay on: the root view controller's view plus the
+  // view of every view controller presented on top of it (share sheet,
+  // image picker, alert, a full-screen or sheet modal...). Covering only the
+  // root view left any presented screen above the overlay, so its live
+  // content showed in the App Switcher. A sheet that doesn't fill the window
+  // gets its own overlay sized to it, and the root's overlay covers the rest.
+  //
+  // Root view controller's view rather than the window itself: under test,
+  // a blur/imageBlur overlay attached straight to the window never showed
+  // any real backdrop content in the App Switcher snapshot regardless of
+  // blurIntensity/style, suggesting that snapshot mechanism walks from
+  // rootViewController.view as "the app's content" rather than arbitrary
+  // window subviews.
+  static func overlayHosts(in window: UIWindow) -> [UIView] {
+    var hosts: [UIView] = []
+    var controller = window.rootViewController
+    if let rootView = controller?.viewIfLoaded { hosts.append(rootView) }
+    while let presented = controller?.presentedViewController {
+      if let view = presented.viewIfLoaded { hosts.append(view) }
+      controller = presented
+    }
+    return hosts.isEmpty ? [window] : hosts
+  }
+
+  private func makeOverlayView(mode: String) -> UIView? {
     switch mode {
     case "blur":
-      let blurView = UIVisualEffectView(
+      return UIVisualEffectView(
         effect: UIBlurEffect(style: SecureScreenPrivacyPlugin.blurStyle(forIntensity: appSwitcherBlurIntensity)))
-      attachOverlay(blurView, to: window)
     case "image":
-      guard let image = UIImage(named: "SecureScreenPrivacyImage") else { return }
+      guard let image = UIImage(named: "SecureScreenPrivacyImage") else { return nil }
       let imageView = UIImageView(image: image)
       // .scaleAspectFit (not .scaleAspectFill) so the whole image is visible
       // rather than cropped when its aspect ratio doesn't match the window's -
@@ -314,14 +363,14 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
       imageView.contentMode = .scaleAspectFit
       imageView.clipsToBounds = true
       imageView.backgroundColor = appSwitcherImageBackgroundColor
-      attachOverlay(imageView, to: window)
+      return imageView
     case "imageBlur":
       // Same sharp image as "image" mode, over a live UIVisualEffectView
       // blur of whatever's behind the window. Both the blur and the sharp
       // image attach in one synchronous step, so there's never a frame
       // where one is visible without the other.
-      guard let image = UIImage(named: "SecureScreenPrivacyImage") else { return }
-      let container = UIView(frame: window.bounds)
+      guard let image = UIImage(named: "SecureScreenPrivacyImage") else { return nil }
+      let container = UIView()
 
       let blurView = UIVisualEffectView(
         effect: UIBlurEffect(style: SecureScreenPrivacyPlugin.blurStyle(forIntensity: appSwitcherBlurIntensity)))
@@ -336,49 +385,24 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
       imageView.clipsToBounds = true
       imageView.backgroundColor = .clear
       container.addSubview(imageView)
-
-      attachOverlay(container, to: window)
+      return container
     case "color":
       let colorView = UIView()
       colorView.backgroundColor = appSwitcherColor
-      attachOverlay(colorView, to: window)
+      return colorView
     default:
-      break
-    }
-  }
-
-  private func attachOverlay(_ view: UIView, to window: UIWindow) {
-    view.frame = window.bounds
-    view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    // Added to the root view controller's view, not directly to the window:
-    // under test, a blur/imageBlur overlay attached straight to the window
-    // never showed any real backdrop content in the App Switcher snapshot
-    // regardless of blurIntensity/style, suggesting that snapshot mechanism
-    // walks from rootViewController.view as "the app's content" rather than
-    // arbitrary window subviews.
-    let overlayHost = window.rootViewController?.view ?? window
-    overlayHost.addSubview(view)
-    overlays.setObject(view, forKey: window)
-    // Only safe to disable here: this is the one point the overlay is
-    // guaranteed to already be covering the window, for every mode -
-    // disabling it any earlier (e.g. in handleWillResignActive) would leave
-    // a window where the secure field is off but nothing has replaced it
-    // yet. Only for the window the secure field actually protects: on iPad
-    // multi-window, covering some other scene's window must not switch off
-    // capture protection for a window that may still be live.
-    if isCaptureProtectionEnabled, window === attachedWindow {
-      screenPreventField.isSecureTextEntry = false
+      return nil
     }
   }
 
   private func removeOverlay(from window: UIWindow) {
-    overlays.object(forKey: window)?.removeFromSuperview()
+    (overlays.object(forKey: window) as? [UIView])?.forEach { $0.removeFromSuperview() }
     overlays.removeObject(forKey: window)
   }
 
   private func removeAllOverlays() {
-    for case let view as UIView in overlays.objectEnumerator()?.allObjects ?? [] {
-      view.removeFromSuperview()
+    for case let views as [UIView] in overlays.objectEnumerator()?.allObjects ?? [] {
+      views.forEach { $0.removeFromSuperview() }
     }
     overlays.removeAllObjects()
   }
@@ -462,7 +486,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     guard isCaptureProtectionEnabled else { return }
     attachWindowIfNeeded()
     // Leave the secure field off while the protected window is still
-    // covered (another scene became active, not this one): attachOverlay()
+    // covered (another scene became active, not this one): showOverlay()
     // turned it off so the overlay, not a blank frame, is what's captured.
     if let attached = attachedWindow, overlays.object(forKey: attached) != nil { return }
     screenPreventField.isSecureTextEntry = true
