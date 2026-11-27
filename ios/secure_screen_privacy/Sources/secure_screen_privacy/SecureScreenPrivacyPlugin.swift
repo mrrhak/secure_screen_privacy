@@ -14,7 +14,11 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   private var appSwitcherColor: UIColor = .black
   private var appSwitcherImageBackgroundColor: UIColor = .black
   private var isAppSwitcherProtectionEnabled = false
-  private var overlayView: UIView?
+  // One overlay per window, keyed weakly by the window it covers: on iPad
+  // multi-window each UIWindowScene resigns/activates independently, so a
+  // single shared overlay slot could cover the wrong window or be removed
+  // from a window that is still in the App Switcher.
+  private let overlays = NSMapTable<UIWindow, UIView>.weakToStrongObjects()
   private var screenshotEventSink: FlutterEventSink?
   private var screenRecordingEventSink: FlutterEventSink?
   private var isRecordingListening = false
@@ -280,7 +284,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   private func clearAppSwitcherProtection() -> Bool {
     isAppSwitcherProtectionEnabled = false
     appSwitcherMode = nil
-    removeOverlay()
+    removeAllOverlays()
     // Restores what attachOverlay() turned off, in case this is called
     // while the overlay is already attached (e.g. app switcher protection
     // explicitly disabled while backgrounded) - without this, capture
@@ -354,20 +358,54 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     // arbitrary window subviews.
     let overlayHost = window.rootViewController?.view ?? window
     overlayHost.addSubview(view)
-    overlayView = view
+    overlays.setObject(view, forKey: window)
     // Only safe to disable here: this is the one point the overlay is
     // guaranteed to already be covering the window, for every mode -
     // disabling it any earlier (e.g. in handleWillResignActive) would leave
     // a window where the secure field is off but nothing has replaced it
-    // yet.
-    if isCaptureProtectionEnabled {
+    // yet. Only for the window the secure field actually protects: on iPad
+    // multi-window, covering some other scene's window must not switch off
+    // capture protection for a window that may still be live.
+    if isCaptureProtectionEnabled, window === attachedWindow {
       screenPreventField.isSecureTextEntry = false
     }
   }
 
-  private func removeOverlay() {
-    overlayView?.removeFromSuperview()
-    overlayView = nil
+  private func removeOverlay(from window: UIWindow) {
+    overlays.object(forKey: window)?.removeFromSuperview()
+    overlays.removeObject(forKey: window)
+  }
+
+  private func removeAllOverlays() {
+    for case let view as UIView in overlays.objectEnumerator()?.allObjects ?? [] {
+      view.removeFromSuperview()
+    }
+    overlays.removeAllObjects()
+  }
+
+  // The window(s) to cover for a resigning/activating UIScene, taken from
+  // that scene itself rather than from activeWindow(): by the time
+  // sceneWillResignActive runs, the scene may already have left
+  // .foregroundActive, so activeWindow() can return nil (no overlay at all,
+  // live content in the App Switcher) or, on iPad multi-window, another
+  // still-active scene's window (wrong window covered).
+  static func windows(in scene: UIScene) -> [UIWindow] {
+    guard let windowScene = scene as? UIWindowScene else { return [] }
+    let windows = windowScene.windows.filter { !$0.isHidden }
+    return windows.isEmpty ? windowScene.windows : windows
+  }
+
+  // App-delegate path (apps without a UIScene lifecycle): the app delegate's
+  // own window, falling back to the key window of any foreground scene -
+  // again without requiring .foregroundActive, for the same reason as above.
+  private func appDelegateWindow(_ application: UIApplication) -> UIWindow? {
+    if let window = application.delegate?.window ?? nil { return window }
+    let scenes = application.connectedScenes.compactMap { $0 as? UIWindowScene }
+      .filter { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }
+    for scene in scenes {
+      if let key = scene.windows.first(where: { $0.isKeyWindow }) { return key }
+    }
+    return scenes.first?.windows.first
   }
 
   // Four explicit, developer-chosen tiers - not a continuous value bucketed
@@ -399,42 +437,57 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
 
   // MARK: - App lifecycle
   //
-  // Both hook styles call the same shared handler. The active UIWindowScene
-  // can change across background/foreground; re-attach and re-apply protection if it was left enabled.
-  private func handleWillResignActive() {
-    // Both the app-delegate and scene-delegate variants can fire for the same transition
-    // skip if the overlay is already showing.
-    guard overlayView == nil else { return }
+  // Scene-based apps get sceneWillResignActive/sceneDidBecomeActive per
+  // UIScene; apps without a scene lifecycle get the app-delegate variants.
+  // Both resolve the window(s) to act on from the callback's own scene or
+  // application, never from whichever scene is foregroundActive right now.
+  private func handleWillResignActive(windows: [UIWindow]) {
     guard isAppSwitcherProtectionEnabled, let mode = appSwitcherMode else { return }
-    guard let window = activeWindow() else { return }
-
-    // showOverlay attaches synchronously for every mode, so by the time
-    // this call returns (the point at which the OS can capture the App
-    // Switcher snapshot) the overlay is already covering the window.
-    showOverlay(mode: mode, in: window)
+    // Both the app-delegate and scene-delegate variants can fire for the
+    // same transition - skip a window that is already covered.
+    for window in windows where overlays.object(forKey: window) == nil {
+      // showOverlay attaches synchronously for every mode, so by the time
+      // this call returns (the point at which the OS can capture the App
+      // Switcher snapshot) the overlay is already covering the window.
+      showOverlay(mode: mode, in: window)
+    }
   }
 
-  private func handleDidBecomeActive() {
-    removeOverlay()
+  private func handleDidBecomeActive(windows: [UIWindow]?) {
+    if let windows = windows {
+      windows.forEach { removeOverlay(from: $0) }
+    } else {
+      removeAllOverlays()
+    }
     guard isCaptureProtectionEnabled else { return }
     attachWindowIfNeeded()
+    // Leave the secure field off while the protected window is still
+    // covered (another scene became active, not this one): attachOverlay()
+    // turned it off so the overlay, not a blank frame, is what's captured.
+    if let attached = attachedWindow, overlays.object(forKey: attached) != nil { return }
     screenPreventField.isSecureTextEntry = true
   }
 
   public func applicationWillResignActive(_ application: UIApplication) {
-    handleWillResignActive()
+    handleWillResignActive(windows: appDelegateWindow(application).map { [$0] } ?? [])
   }
 
   public func sceneWillResignActive(_ scene: UIScene) {
-    handleWillResignActive()
+    handleWillResignActive(windows: SecureScreenPrivacyPlugin.windows(in: scene))
   }
 
   public func applicationDidBecomeActive(_ application: UIApplication) {
-    handleDidBecomeActive()
+    // The whole app is active again - nothing should stay covered.
+    handleDidBecomeActive(windows: nil)
   }
 
   public func sceneDidBecomeActive(_ scene: UIScene) {
-    handleDidBecomeActive()
+    handleDidBecomeActive(windows: SecureScreenPrivacyPlugin.windows(in: scene))
+  }
+
+  // Test-only view of which windows currently carry an overlay.
+  func hasOverlay(on window: UIWindow) -> Bool {
+    overlays.object(forKey: window) != nil
   }
 }
 
