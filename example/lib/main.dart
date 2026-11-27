@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:secure_screen_privacy/secure_screen_privacy.dart';
+import 'package:share_plus/share_plus.dart';
 
 void main() {
   runApp(const MyApp());
@@ -214,6 +215,21 @@ class _HomeScreenState extends State<_HomeScreen> {
     setState(() {
       _isAppSwitcherProtectionEnabled = enable && result;
     });
+  }
+
+  // A native screen presented over the app (UIActivityViewController on
+  // iOS), for checking the App Switcher cover also hides presented screens.
+  // iPad shows the sheet as a popover, which needs an anchor: the button.
+  Future<void> _openShareSheet(BuildContext buttonContext) async {
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'secure_screen_privacy example',
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
+      ),
+    );
   }
 
   // Subscribing to the stream IS starting native screenshot detection;
@@ -486,6 +502,23 @@ class _HomeScreenState extends State<_HomeScreen> {
               ElevatedButton(
                 onPressed: () => Navigator.pushNamed(context, _walletRoute),
                 child: const Text('Wallet (both)'),
+              ),
+              const Divider(height: 32),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Opens the system share sheet on top of the app. With '
+                  '"Hide content in app switcher" on, open the App Switcher '
+                  'while it is showing: the share sheet must be covered too.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              Builder(
+                builder: (buttonContext) => ElevatedButton.icon(
+                  onPressed: () => _openShareSheet(buttonContext),
+                  icon: const Icon(Icons.ios_share),
+                  label: const Text('Open share sheet'),
+                ),
               ),
               SizedBox(height: 24),
               Image.network(
