@@ -419,4 +419,73 @@ internal class SecureScreenPrivacyPluginTest {
     fun isRecordingStateVisible_arbitraryOtherState_returnsFalse() {
         assertFalse(isRecordingStateVisible(-1))
     }
+
+    // Screenshot detection path selection / de-duplication / delete filter
+
+    @Test
+    fun screenshotDetectionPathForSdkInt_api34AndAbove_usesScreenCaptureCallback() {
+        assertEquals(ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK, screenshotDetectionPathForSdkInt(34))
+        assertEquals(ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK, screenshotDetectionPathForSdkInt(36))
+    }
+
+    @Test
+    fun screenshotDetectionPathForSdkInt_belowApi34_usesMediaStoreObserver() {
+        assertEquals(ScreenshotDetectionPath.MEDIA_STORE_OBSERVER, screenshotDetectionPathForSdkInt(33))
+        assertEquals(ScreenshotDetectionPath.MEDIA_STORE_OBSERVER, screenshotDetectionPathForSdkInt(24))
+    }
+
+    @Test
+    fun screenshotEventDeduper_firstEvent_isEmitted() {
+        assertTrue(ScreenshotEventDeduper(1_500L).shouldEmit(10_000L))
+    }
+
+    @Test
+    fun screenshotEventDeduper_burstWithinWindow_isCollapsedToOne() {
+        val deduper = ScreenshotEventDeduper(1_500L)
+        assertTrue(deduper.shouldEmit(10_000L)) // pending insert
+        assertFalse(deduper.shouldEmit(10_200L)) // update once written
+        assertFalse(deduper.shouldEmit(11_499L))
+    }
+
+    @Test
+    fun screenshotEventDeduper_afterWindow_emitsAgain() {
+        val deduper = ScreenshotEventDeduper(1_500L)
+        assertTrue(deduper.shouldEmit(10_000L))
+        assertTrue(deduper.shouldEmit(11_500L))
+    }
+
+    @Test
+    fun screenshotEventDeduper_windowIsMeasuredFromLastEmit_notLastDrop() {
+        val deduper = ScreenshotEventDeduper(1_500L)
+        assertTrue(deduper.shouldEmit(10_000L))
+        assertFalse(deduper.shouldEmit(11_000L))
+        assertTrue(deduper.shouldEmit(11_600L))
+    }
+
+    @Test
+    fun screenshotEventDeduper_clockGoingBackwards_emits() {
+        val deduper = ScreenshotEventDeduper(1_500L)
+        assertTrue(deduper.shouldEmit(10_000L))
+        assertTrue(deduper.shouldEmit(9_000L))
+    }
+
+    @Test
+    fun screenshotEventDeduper_reset_allowsImmediateEmit() {
+        val deduper = ScreenshotEventDeduper(1_500L)
+        assertTrue(deduper.shouldEmit(10_000L))
+        deduper.reset()
+        assertTrue(deduper.shouldEmit(10_100L))
+    }
+
+    @Test
+    fun isMediaStoreChangeWorthChecking_deleteFlag_isSkipped() {
+        assertFalse(isMediaStoreChangeWorthChecking(android.content.ContentResolver.NOTIFY_DELETE))
+    }
+
+    @Test
+    fun isMediaStoreChangeWorthChecking_insertUpdateOrUnknown_isChecked() {
+        assertTrue(isMediaStoreChangeWorthChecking(android.content.ContentResolver.NOTIFY_INSERT))
+        assertTrue(isMediaStoreChangeWorthChecking(android.content.ContentResolver.NOTIFY_UPDATE))
+        assertTrue(isMediaStoreChangeWorthChecking(0))
+    }
 }
