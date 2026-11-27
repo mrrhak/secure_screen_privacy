@@ -289,10 +289,17 @@ class SecureScreenPrivacyPlugin :
     // FLAG_SECURE blocks both screenshots and screen recording of the
     // Activity's window, and (unlike iOS) also blanks its app-switcher/
     // recents thumbnail for free - no separate app-switcher handling needed
-    // on Android. Returns false (rather than silently reporting success) when
-    // there is no attached Activity/Window to apply the flag to.
+    // on Android.
+    //
+    // The requested state is always recorded, even when no Activity/Window
+    // is attached yet (add-to-app or background engines, or a call landing
+    // between onDetachedFromActivityForConfigChanges and
+    // onReattachedToActivityForConfigChanges): reapplyFlagSecureIfNeeded()
+    // applies it as soon as an Activity attaches. Dropping the request
+    // instead would leave the screen unprotected with no later retry.
     private fun setCaptureProtection(enabled: Boolean): Boolean {
-        val window = activity?.window ?: return false
+        isCaptureProtectionEnabled = enabled
+        val window = activity?.window ?: return true
         if (enabled) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else if (!isAppSwitcherProtectionEnabled) {
@@ -302,7 +309,6 @@ class SecureScreenPrivacyPlugin :
             // though isAppSwitcherProtectionEnabled would still report true.
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
-        isCaptureProtectionEnabled = enabled
         return true
     }
 
@@ -332,8 +338,10 @@ class SecureScreenPrivacyPlugin :
     // Android only reads mode (to preserve the existing null-check contract)
     // and otherwise ignores all of them.
 
+    // Like setCaptureProtection, recorded even with no Activity attached yet
+    // and applied by reapplyFlagSecureIfNeeded() on attach.
     private fun setAppSwitcherProtection(mode: String?): Boolean {
-        if (mode == null || activity == null) return false
+        if (mode == null) return false
         isAppSwitcherProtectionEnabled = true
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         return true
