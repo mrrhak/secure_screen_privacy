@@ -23,7 +23,7 @@ final isEnabled = await privacy.isCaptureProtectionEnabled();
 ```
 
 > **Note:** with only `enableCaptureProtection` on (no app switcher protection),
-> the OS app switcher / recents preview will show a plain black card while
+> the OS app switcher / recents preview will show a plain blank card while
 > backgrounded. That's the underlying OS mechanism itself — Android's
 > `FLAG_SECURE` and iOS's secure-text-entry trick both blank any capture of
 > the window, including the app switcher snapshot, not just screenshots/
@@ -68,8 +68,8 @@ final isEnabled = await privacy.isAppSwitcherProtectionEnabled();
 Shows a blur, a static image (optionally over a blurred backdrop), or a
 solid color in the iOS App Switcher preview instead of your live UI
 whenever the app is backgrounded (Android always shows a plain
-black card instead, see
-[Android: always a plain black card](#android-always-a-plain-black-card)).
+blank card instead, see
+[Android: always a plain blank card](#android-always-a-plain-blank-card)).
 
 `AppSwitcherProtectionMode.image` and `AppSwitcherProtectionMode.imageBlur`
 require the host app to bundle an image set named `SecureScreenPrivacyImage`
@@ -99,30 +99,34 @@ overlay.
 > Control Center, share sheet), so the overlay will briefly flash in those
 > cases too — this is inherent to the technique, not a bug.
 
-#### Android: always a plain black card
+#### Android: always a plain blank card
 
-On Android the App Switcher always shows a **plain black card** while
-protection is on. `mode`, `blurIntensity`, `color` and
-`imageBackgroundColor` only change the look **on iOS**. Android accepts them,
-so the same Dart code runs on both platforms, but ignores them.
+On Android the App Switcher shows a **plain blank card** while protection is
+on: usually black, sometimes filled with your app's background color (white
+with the default light theme). Your app's content is hidden either way.
+`mode`, `blurIntensity`, `color` and `imageBackgroundColor` only change the
+look **on iOS**. Android accepts them, so the same Dart code runs on both
+platforms, but ignores them.
 
-<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain black card for the protected app">
+<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain blank card for the protected app">
 
 This is deliberate, not a missing feature or a bug:
 
-- Protection on Android uses `FLAG_SECURE`, and Android blacks out the App
-  Switcher picture of a `FLAG_SECURE` window. A custom color or image would
-  only show if `FLAG_SECURE` were off, which would also let screenshots
-  through.
+- Protection on Android uses `FLAG_SECURE`, and Android leaves the content
+  out of the App Switcher picture of a `FLAG_SECURE` window. A custom color
+  or image would only show if `FLAG_SECURE` were off, which would also let
+  screenshots through.
 - A blur never makes it into the App Switcher picture: Android takes the
   picture before a blur can finish drawing.
 - No app-level technique (a custom cover, a `RenderEffect` blur,
-  `PixelCopy`, or `FLAG_SECURE` itself) hides the live "swipe up and hold"
-  peek with gesture navigation. During that gesture Android shows the app's
-  real screen directly. This is a known Android limit.
+  `PixelCopy`, or `FLAG_SECURE` itself) hides the app's live screen while it
+  is still open: opening the App Switcher straight from the app, or the
+  "swipe up and hold" gesture, shows the real screen for that moment, because
+  Android draws the app's actual window there. Once the app is in the
+  background, its card is blank. This is a known Android limit.
 
 So `FLAG_SECURE` alone already gives the most protection Android allows, and
-the black card is what users see from banking and password apps too. `mode`
+a blank card is what users see from banking and password apps too. `mode`
 is still required, and still matters, on iOS.
 
 ### Per-route protection
