@@ -21,6 +21,9 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // that is still in the App Switcher.
   private let overlays = NSMapTable<UIWindow, NSArray>.weakToStrongObjects()
   private var screenshotEventSink: FlutterEventSink?
+  // Collapses the duplicate screenshot notifications iOS posts for a single
+  // screenshot (see handleScreenshotTaken()).
+  var screenshotDeduper = ScreenshotEventDeduper()
   private var screenRecordingEventSink: FlutterEventSink?
   private var isRecordingListening = false
   // Strong reference: FlutterEventChannel.setStreamHandler does not
@@ -64,10 +67,12 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // the toggle. This notification is UIApplication-level (posted once per
   // screenshot regardless of how many UIScenes exist), unlike
   // applicationWillResignActive/sceneWillResignActive above, so it needs no
-  // scene-specific dual-hook.
+  // scene-specific dual-hook. It can still arrive more than once for a
+  // single screenshot, though - see handleScreenshotTaken().
 
   public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     screenshotEventSink = events
+    screenshotDeduper.reset()
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(handleScreenshotTaken),
@@ -88,7 +93,14 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // commonly observed to be main-thread in practice, but FlutterEventSink
   // must only be invoked on the platform (main) thread, so the dispatch
   // below is a cheap, unconditional safety net rather than an assumption.
-  @objc private func handleScreenshotTaken() {
+  //
+  // One screenshot can post the notification twice: on an iPhone 17 Pro
+  // (iOS 27.2.1) a single screenshot posted it twice, 3 ms apart, to the
+  // one observer this plugin registers - so every screenshot was reported
+  // twice. The deduper drops any repeat that arrives within its window of
+  // the last reported screenshot.
+  @objc func handleScreenshotTaken() {
+    guard screenshotDeduper.shouldEmit(at: ProcessInfo.processInfo.systemUptime) else { return }
     let millis = Int64(Date().timeIntervalSince1970 * 1000)
     DispatchQueue.main.async { [weak self] in
       self?.screenshotEventSink?(["timestamp": millis])
@@ -512,6 +524,29 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // Test-only view of which windows currently carry an overlay.
   func hasOverlay(on window: UIWindow) -> Bool {
     overlays.object(forKey: window) != nil
+  }
+}
+
+// Decides whether a screenshot notification is a new screenshot or a repeat
+// of the one just reported. Times are monotonic seconds (systemUptime), so a
+// wall-clock change can't swallow or duplicate an event. The window is
+// measured from the last *reported* screenshot and is far shorter than two
+// real screenshots can be taken apart, yet far longer than the few
+// milliseconds between duplicate notifications.
+struct ScreenshotEventDeduper {
+  static let window: TimeInterval = 0.5
+  private var lastEmittedAt: TimeInterval?
+
+  mutating func shouldEmit(at now: TimeInterval) -> Bool {
+    if let last = lastEmittedAt, now - last >= 0, now - last < ScreenshotEventDeduper.window {
+      return false
+    }
+    lastEmittedAt = now
+    return true
+  }
+
+  mutating func reset() {
+    lastEmittedAt = nil
   }
 }
 
