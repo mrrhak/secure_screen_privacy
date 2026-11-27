@@ -974,4 +974,134 @@ void main() {
       },
     );
   });
+
+  group('removing and replacing routes', () {
+    Future<NavigatorState> pumpNavigator(
+      WidgetTester tester,
+      SecureScreenPrivacyNavigatorObserver observer,
+    ) async {
+      final key = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Navigator(
+            key: key,
+            observers: [observer],
+            onGenerateRoute: (_) => _fakeRoute('/'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return key.currentState!;
+    }
+
+    // The capture call of the last step applied.
+    String lastCaptureCall() => fakePlatform.calls.lastWhere(
+      (call) => call.endsWith('CaptureProtection'),
+    );
+
+    testWidgets(
+      'pushAndRemoveUntil to a protected page keeps it protected',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/home': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final nav = await pumpNavigator(tester, observer);
+        nav.push(_fakeRoute('/login'));
+        await tester.pumpAndSettle();
+
+        nav.pushAndRemoveUntil(_fakeRoute('/home'), (_) => false);
+        await tester.pumpAndSettle();
+
+        expect(lastCaptureCall(), 'enableCaptureProtection');
+      },
+    );
+
+    testWidgets(
+      'removing a page under a protected page keeps the top protected',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/pay': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final nav = await pumpNavigator(tester, observer);
+        final middle = _fakeRoute('/middle');
+        nav.push(middle);
+        nav.push(_fakeRoute('/pay'));
+        await tester.pumpAndSettle();
+        fakePlatform.calls.clear();
+
+        nav.removeRoute(middle);
+        await tester.pumpAndSettle();
+
+        // Nothing on screen changed, so nothing is applied.
+        expect(fakePlatform.calls, isEmpty);
+      },
+    );
+
+    testWidgets('removing the top page applies the page under it', (
+      tester,
+    ) async {
+      final observer = SecureScreenPrivacyNavigatorObserver(
+        policies: {'/pay': const SecureRouteConfig(captureProtection: true)},
+      );
+      final nav = await pumpNavigator(tester, observer);
+      nav.push(_fakeRoute('/pay'));
+      final top = _fakeRoute('/details');
+      nav.push(top);
+      await tester.pumpAndSettle();
+
+      nav.removeRoute(top);
+      await tester.pumpAndSettle();
+
+      expect(lastCaptureCall(), 'enableCaptureProtection');
+    });
+
+    testWidgets(
+      'a protected popup replaced by an ignored popup gives the page its policy back',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/pin-dialog': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final nav = await pumpNavigator(tester, observer);
+        final pinDialog = _fakePopupRoute(name: '/pin-dialog');
+        nav.push(pinDialog);
+        await tester.pumpAndSettle();
+        expect(lastCaptureCall(), 'enableCaptureProtection');
+
+        nav.replace(oldRoute: pinDialog, newRoute: _fakePopupRoute());
+        await tester.pumpAndSettle();
+
+        expect(lastCaptureCall(), 'disableCaptureProtection');
+      },
+    );
+
+    testWidgets(
+      'replacing a page under the top one does not apply its policy',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/pay': const SecureRouteConfig(captureProtection: true),
+            '/other': const SecureRouteConfig(),
+          },
+        );
+        final nav = await pumpNavigator(tester, observer);
+        final middle = _fakeRoute('/middle');
+        nav.push(middle);
+        nav.push(_fakeRoute('/pay'));
+        await tester.pumpAndSettle();
+        fakePlatform.calls.clear();
+
+        nav.replace(oldRoute: middle, newRoute: _fakeRoute('/other'));
+        await tester.pumpAndSettle();
+
+        expect(fakePlatform.calls, isEmpty);
+      },
+    );
+  });
 }
