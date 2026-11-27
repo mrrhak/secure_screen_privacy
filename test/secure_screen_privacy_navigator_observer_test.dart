@@ -239,6 +239,153 @@ void main() {
   });
 
   group('SecureScreenPrivacyNavigatorObserver', () {
+    testWidgets(
+      'real Navigator: popping a page opened from a dialog keeps the page under it protected',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final navigatorKey = GlobalKey<NavigatorState>();
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Navigator(
+              key: navigatorKey,
+              observers: [observer],
+              onGenerateRoute: (settings) => _fakeRoute('/payment'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final nav = navigatorKey.currentState!;
+        nav.push(_fakePopupRoute());
+        await tester.pumpAndSettle();
+        nav.push(_fakeRoute('/details'));
+        await tester.pumpAndSettle();
+        fakePlatform.calls.clear();
+
+        nav.pop();
+        await tester.pumpAndSettle();
+
+        expect(fakePlatform.calls, [
+          'enableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    test(
+      'popping a page opened from a dialog keeps the page under the dialog protected',
+      () async {
+        // page A (protected) -> dialog -> page B pushed from the dialog ->
+        // pop B. didPop reports the dialog as previousRoute; the policy that
+        // must apply is A's, not defaultConfig.
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final pageA = _fakeRoute('/payment');
+        final dialog = _fakePopupRoute();
+        final pageB = _fakeRoute('/details');
+
+        observer.didPush(pageA, null);
+        observer.didPush(dialog, pageA);
+        observer.didPush(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+        fakePlatform.calls.clear();
+
+        observer.didPop(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, [
+          'enableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    test(
+      'removing a page opened from a dialog keeps the page under the dialog protected',
+      () async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final pageA = _fakeRoute('/payment');
+        final dialog = _fakePopupRoute();
+        final pageB = _fakeRoute('/details');
+
+        observer.didPush(pageA, null);
+        observer.didPush(dialog, pageA);
+        observer.didPush(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+        fakePlatform.calls.clear();
+
+        observer.didRemove(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, contains('enableCaptureProtection'));
+        expect(fakePlatform.calls, isNot(contains('disableCaptureProtection')));
+      },
+    );
+
+    test(
+      'a replaced page is no longer used as the page under a dialog',
+      () async {
+        // A -> replaced by C (unprotected) -> dialog -> page B -> pop B:
+        // C's policy applies, not A's.
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+            '/home': const SecureRouteConfig(),
+          },
+        );
+        final pageA = _fakeRoute('/payment');
+        final pageC = _fakeRoute('/home');
+        final dialog = _fakePopupRoute();
+        final pageB = _fakeRoute('/details');
+
+        observer.didPush(pageA, null);
+        observer.didReplace(newRoute: pageC, oldRoute: pageA);
+        observer.didPush(dialog, pageC);
+        observer.didPush(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+        fakePlatform.calls.clear();
+
+        observer.didPop(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, [
+          'disableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    test(
+      'popping back to a dialog with no known page underneath uses defaultConfig',
+      () async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/payment': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+
+        observer.didPop(_fakeRoute('/payment'), _fakePopupRoute());
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, [
+          'disableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
     test('didPush applies policy for pushed route', () async {
       final observer = SecureScreenPrivacyNavigatorObserver(
         policies: {

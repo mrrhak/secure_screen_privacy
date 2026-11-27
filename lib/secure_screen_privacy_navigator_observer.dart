@@ -49,28 +49,59 @@ class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
   // enable call happens to take longer than the pop's disable call).
   Future<void> _pending = Future<void>.value();
 
+  // The page routes (not popups) currently on the Navigator, bottom first,
+  // as seen through this observer's own callbacks. Only used to find the
+  // page that is really showing when the route revealed by a pop/remove is a
+  // popup: e.g. page A -> dialog -> page B pushed from the dialog, then B is
+  // popped. didPop reports the dialog as previousRoute, but the protection
+  // that should apply is A's - without this the dialog's (unnamed) route
+  // resolved to defaultConfig and turned A's protection off.
+  final List<Route<dynamic>> _pageRoutes = [];
+
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (_isAnonymousPopup(route)) return;
+    _pageRoutes.add(route);
     _applyPolicyForRoute(route);
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (_isAnonymousPopup(route)) return;
-    _applyPolicyForRoute(previousRoute);
+    _pageRoutes.remove(route);
+    _applyPolicyForRoute(_visiblePage(previousRoute));
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    if (_isAnonymousPopup(newRoute)) return;
+    final index = oldRoute == null ? -1 : _pageRoutes.indexOf(oldRoute);
+    final newIsPage = newRoute != null && !_isAnonymousPopup(newRoute);
+    if (index >= 0) {
+      if (newIsPage) {
+        _pageRoutes[index] = newRoute;
+      } else {
+        _pageRoutes.removeAt(index);
+      }
+    } else if (newIsPage) {
+      _pageRoutes.add(newRoute);
+    }
+    if (!newIsPage) return;
     _applyPolicyForRoute(newRoute);
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (_isAnonymousPopup(route)) return;
-    _applyPolicyForRoute(previousRoute);
+    _pageRoutes.remove(route);
+    _applyPolicyForRoute(_visiblePage(previousRoute));
+  }
+
+  // The page whose policy should apply once [revealed] is on top: itself if
+  // it is a page, otherwise (a popup) the top-most page this observer knows
+  // is still open underneath it.
+  Route<dynamic>? _visiblePage(Route<dynamic>? revealed) {
+    if (revealed == null || !_isAnonymousPopup(revealed)) return revealed;
+    return _pageRoutes.isEmpty ? null : _pageRoutes.last;
   }
 
   // Widgets like DropdownButton, PopupMenuButton, and showDialog push their
