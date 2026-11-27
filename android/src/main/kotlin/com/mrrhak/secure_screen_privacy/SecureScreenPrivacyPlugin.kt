@@ -97,6 +97,15 @@ class SecureScreenPrivacyPlugin :
             override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
                 screenRecordingEventSink = events
                 isRecordingListening = true
+                // Below API 35 there's nothing to register, so tell the
+                // subscriber once that the state is unknown instead of
+                // sending nothing. Sent here, not on Activity attach, so it
+                // isn't repeated on every Activity recreation.
+                if (screenRecordingRegistrationPathForSdkInt(Build.VERSION.SDK_INT) ==
+                    ScreenRecordingRegistrationPath.UNSUPPORTED
+                ) {
+                    emitScreenRecordingEvent(null)
+                }
                 registerScreenRecordingCallbacksIfNeeded()
             }
 
@@ -291,7 +300,7 @@ class SecureScreenPrivacyPlugin :
     // API 35+: WindowManager.addScreenRecordingCallback gives true start AND
     // stop detection (needs the install-time DETECT_SCREEN_RECORDING
     // permission declared in this plugin's AndroidManifest.xml). Below API 35:
-    // no-op. Android 14 has no screen-recording signal at all:
+    // one "unknown" event (isRecording null) on subscribe, then nothing. Android 14 has no screen-recording signal at all:
     // Activity.ScreenCaptureCallback, which an earlier version used here,
     // fires for screenshots, not recordings, so it reported every screenshot
     // as "recording started" and never saw a real recording.
@@ -320,7 +329,9 @@ class SecureScreenPrivacyPlugin :
             act.windowManager.addScreenRecordingCallback(act.mainExecutor, callback)
         } catch (e: SecurityException) {
             // Only if a host app strips DETECT_SCREEN_RECORDING from the
-            // merged manifest - degrade to no detection instead of failing.
+            // merged manifest - degrade to no detection instead of failing,
+            // and report "unknown" rather than staying silent.
+            emitScreenRecordingEvent(null)
             return
         }
         screenRecordingCallback = callback
@@ -338,7 +349,8 @@ class SecureScreenPrivacyPlugin :
     // act.mainExecutor already delivers these callbacks on the main thread,
     // unlike handleMediaStoreChange's ContentObserver (which genuinely runs
     // off-main) - no Handler(Looper.getMainLooper()).post() hop needed here.
-    private fun emitScreenRecordingEvent(isRecording: Boolean) {
+    // null means "can't tell" (Dart maps it to ScreenRecordingState.unknown).
+    private fun emitScreenRecordingEvent(isRecording: Boolean?) {
         screenRecordingEventSink?.success(
             mapOf("isRecording" to isRecording, "timestamp" to System.currentTimeMillis())
         )
@@ -560,7 +572,7 @@ internal fun isMediaStoreChangeWorthChecking(flags: Int): Boolean =
 // unit-testable.
 internal enum class ScreenRecordingRegistrationPath {
     WINDOW_MANAGER_CALLBACK, // API 35+: true start/stop detection
-    UNSUPPORTED // < API 35: graceful no-op (Android 14 has no recording signal)
+    UNSUPPORTED // < API 35: one "unknown" event on subscribe (Android 14 has no recording signal)
 }
 
 internal fun screenRecordingRegistrationPathForSdkInt(sdkInt: Int): ScreenRecordingRegistrationPath =

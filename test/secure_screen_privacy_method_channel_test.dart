@@ -117,7 +117,40 @@ void main() {
 
     final event = await platform.screenRecordingEvents.first;
 
+    expect(event.state, ScreenRecordingState.recording);
     expect(event.isRecording, true);
+    expect(event.timestamp, DateTime.fromMillisecondsSinceEpoch(1752150000000));
+  });
+
+  test('screenRecordingEvents maps isRecording false to notRecording', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockStreamHandler(
+      screenRecordingEventChannel,
+      MockStreamHandler.inline(
+        onListen: (arguments, events) =>
+            events.success({'isRecording': false, 'timestamp': 1752150000000}),
+      ),
+    );
+
+    final event = await platform.screenRecordingEvents.first;
+
+    expect(event.state, ScreenRecordingState.notRecording);
+    expect(event.isRecording, false);
+    expect(event.timestamp, DateTime.fromMillisecondsSinceEpoch(1752150000000));
+  });
+
+  test('screenRecordingEvents maps isRecording null to unknown', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockStreamHandler(
+      screenRecordingEventChannel,
+      MockStreamHandler.inline(
+        onListen: (arguments, events) =>
+            events.success({'isRecording': null, 'timestamp': 1752150000000}),
+      ),
+    );
+
+    final event = await platform.screenRecordingEvents.first;
+
+    expect(event.state, ScreenRecordingState.unknown);
+    expect(event.isRecording, false);
     expect(event.timestamp, DateTime.fromMillisecondsSinceEpoch(1752150000000));
   });
 }

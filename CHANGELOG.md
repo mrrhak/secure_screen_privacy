@@ -1,6 +1,7 @@
 ## 0.0.1
 
 * Initial release.
+* Add `ScreenRecordingState` (`recording`/`notRecording`/`unknown`) and `ScreenRecordingEvent.state`. Android 14 (API 34) and below, which can't detect screen recording, now send one `unknown` event on subscribe instead of nothing, so apps can tell "can't detect" from "not recording". `isRecording` is now a getter (true only for `recording`); the constructor takes a `ScreenRecordingState`.
 * Fix iOS `disableCaptureProtection` moving the app's window under the secure text field even though protection was off. With `SecureScreenPrivacyNavigatorObserver` this happened at startup in every app, since the first route disables protection. Only enabling does it now.
 * iOS privacy manifest: declare the system boot time API (`ProcessInfo.systemUptime`, reason `35F9.1`, used to merge duplicate screenshot notifications) and bundle the manifest for both Swift Package Manager and CocoaPods.
 * Fix iOS `image`/`imageBlur` app switcher modes turning protection off entirely when the host app has no `SecureScreenPrivacyImage` asset (the call returned `false`, which `SecureScreenPrivacyNavigatorObserver` ignores). They now fall back to a plain `imageBackgroundColor` cover / plain blur and log a warning.

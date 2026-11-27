@@ -98,8 +98,7 @@ class SecureScreenPrivacy {
   /// A broadcast stream of screen recording state transitions.
   ///
   /// Subscribing starts native screen recording detection (Android:
-  /// `WindowManager.addScreenRecordingCallback` on API 35+, no-op below;
-  /// iOS:
+  /// `WindowManager.addScreenRecordingCallback` on API 35+; iOS:
   /// `UIScreen.capturedDidChangeNotification`); cancelling the last
   /// subscription stops it. There is no separate start/stop method - the
   /// subscription *is* the toggle. The current state is emitted immediately
@@ -107,7 +106,8 @@ class SecureScreenPrivacy {
   /// recording.
   ///
   /// See the README for platform caveats - most notably, Android 14 (API 34)
-  /// and below emit nothing: Android 14 has no screen-recording signal.
+  /// and below have no screen-recording signal, so they send a single
+  /// [ScreenRecordingState.unknown] event on subscribe and nothing after.
   Stream<ScreenRecordingEvent> get screenRecordingEvents =>
       SecureScreenPrivacyPlatform.instance.screenRecordingEvents;
 }

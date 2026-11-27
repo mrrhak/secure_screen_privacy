@@ -39,7 +39,10 @@ class MockSecureScreenPrivacyPlatform
 
   @override
   Stream<ScreenRecordingEvent> get screenRecordingEvents => Stream.value(
-    ScreenRecordingEvent(true, DateTime.fromMillisecondsSinceEpoch(0)),
+    ScreenRecordingEvent(
+      ScreenRecordingState.recording,
+      DateTime.fromMillisecondsSinceEpoch(0),
+    ),
   );
 }
 
