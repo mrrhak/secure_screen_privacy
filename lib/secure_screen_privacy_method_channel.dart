@@ -47,10 +47,15 @@ class MethodChannelSecureScreenPrivacy extends SecureScreenPrivacyPlatform {
   late final Stream<ScreenRecordingEvent> _screenRecordingEvents =
       screenRecordingEventChannel.receiveBroadcastStream().map((event) {
         final map = Map<Object?, Object?>.from(event as Map);
-        final isRecording = map['isRecording'] as bool;
+        // Native sends null when it can't tell (Android 14 and below).
+        final isRecording = map['isRecording'] as bool?;
         final millis = map['timestamp'] as int;
         return ScreenRecordingEvent(
-          isRecording,
+          switch (isRecording) {
+            true => ScreenRecordingState.recording,
+            false => ScreenRecordingState.notRecording,
+            null => ScreenRecordingState.unknown,
+          },
           DateTime.fromMillisecondsSinceEpoch(millis),
         );
       });

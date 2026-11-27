@@ -95,7 +95,7 @@ class _HomeScreenState extends State<_HomeScreen> {
   bool get _isListeningForScreenRecording =>
       _screenRecordingSubscription != null;
   StreamSubscription<ScreenRecordingEvent>? _screenRecordingSubscription;
-  bool _isRecordingActive = false;
+  ScreenRecordingState? _recordingState;
   final List<ScreenRecordingEvent> _screenRecordingEventLog = [];
 
   static const _colorSwatches = [
@@ -264,7 +264,7 @@ class _HomeScreenState extends State<_HomeScreen> {
           .listen((event) {
             if (!mounted) return;
             setState(() {
-              _isRecordingActive = event.isRecording;
+              _recordingState = event.state;
               _screenRecordingEventLog.insert(0, event);
               if (_screenRecordingEventLog.length > 5) {
                 _screenRecordingEventLog.removeLast();
@@ -274,7 +274,7 @@ class _HomeScreenState extends State<_HomeScreen> {
     } else {
       _screenRecordingSubscription?.cancel();
       _screenRecordingSubscription = null;
-      _isRecordingActive = false;
+      _recordingState = null;
     }
     setState(() {});
   }
@@ -453,9 +453,13 @@ class _HomeScreenState extends State<_HomeScreen> {
                 title: const Text('Listen for screen recording'),
                 subtitle: Text(
                   _isListeningForScreenRecording
-                      ? (_isRecordingActive
-                            ? 'Recording active'
-                            : 'Not recording')
+                      ? switch (_recordingState) {
+                          ScreenRecordingState.recording => 'Recording active',
+                          ScreenRecordingState.notRecording => 'Not recording',
+                          ScreenRecordingState.unknown =>
+                            "Unknown (this device can't detect recording)",
+                          null => 'Waiting for state',
+                        }
                       : 'Off',
                 ),
                 value: _isListeningForScreenRecording,
@@ -476,7 +480,11 @@ class _HomeScreenState extends State<_HomeScreen> {
                     children: [
                       for (final event in _screenRecordingEventLog)
                         Text(
-                          '${event.isRecording ? "Started" : "Stopped"}: '
+                          '${switch (event.state) {
+                            ScreenRecordingState.recording => "Started",
+                            ScreenRecordingState.notRecording => "Stopped",
+                            ScreenRecordingState.unknown => "Unknown",
+                          }}: '
                           '${event.timestamp.toIso8601String()}',
                         ),
                     ],

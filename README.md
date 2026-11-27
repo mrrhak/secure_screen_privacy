@@ -165,7 +165,14 @@ Get notified when the screen starts or stops being recorded/mirrored:
 
 ```dart
 final subscription = privacy.screenRecordingEvents.listen((event) {
-  print('Recording ${event.isRecording ? "started" : "stopped"} at ${event.timestamp}');
+  switch (event.state) {
+    case ScreenRecordingState.recording:
+      print('Recording started at ${event.timestamp}');
+    case ScreenRecordingState.notRecording:
+      print('Recording stopped at ${event.timestamp}');
+    case ScreenRecordingState.unknown:
+      print("This device can't detect screen recording");
+  }
 });
 
 // Later:
@@ -173,8 +180,7 @@ await subscription.cancel();
 ```
 
 Subscribing to `screenRecordingEvents` *is* what starts native detection
-(Android: `WindowManager.addScreenRecordingCallback` on API 35+, no-op below
-API 35; iOS:
+(Android: `WindowManager.addScreenRecordingCallback` on API 35+; iOS:
 `UIScreen.capturedDidChangeNotification`); cancelling the subscription stops
 it. There's no separate start/stop method. The current state is emitted
 immediately on subscribe, so a late subscriber doesn't miss an
@@ -184,8 +190,10 @@ permission, which the plugin declares for you and the user never sees).
 
 > **Android note:** recording detection needs **Android 15 (API 35)** or
 > newer, where `WindowManager.addScreenRecordingCallback` gives true start
-> *and* stop detection. **Below API 35** it's a graceful no-op and nothing is
-> ever emitted: Android 14 has no screen-recording signal. (Its
+> *and* stop detection. **Below API 35** Android 14 has no screen-recording
+> signal, so the stream sends one `ScreenRecordingState.unknown` event on
+> subscribe and nothing after. (`event.isRecording` is `false` for both
+> `notRecording` and `unknown`; check `event.state` to tell them apart.) (Its
 > `Activity.ScreenCaptureCallback` fires for screenshots, not recordings;
 > see `screenshotEvents`.)
 
