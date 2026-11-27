@@ -523,6 +523,10 @@ class _HomeScreenState extends State<_HomeScreen> {
               SizedBox(height: 24),
               Image.network(
                 'https://c4.wallpaperflare.com/wallpaper/860/881/255/amoled-dragon-phone-iphone-vertical-hd-wallpaper-preview.jpg',
+                // Offline (or in widget tests, where every HTTP request gets
+                // a 400) the image just doesn't show instead of throwing.
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
               ),
             ],
           ),
