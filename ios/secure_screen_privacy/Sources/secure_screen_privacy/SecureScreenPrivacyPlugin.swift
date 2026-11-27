@@ -10,6 +10,9 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
 
   // App switcher protection state.
   private var appSwitcherMode: String?
+  // Where image/imageBlur modes get their picture. A property (not a direct
+  // UIImage(named:) call) so tests can simulate a host app without the asset.
+  var appSwitcherImageProvider: () -> UIImage? = { UIImage(named: "SecureScreenPrivacyImage") }
   private var appSwitcherBlurIntensity: String = "ultraLight"
   private var appSwitcherColor: UIColor = .black
   private var appSwitcherImageBackgroundColor: UIColor = .black
@@ -277,7 +280,15 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
 
   private func setAppSwitcherProtection(from arguments: [String: Any]?) -> Bool {
     guard let mode = arguments?["mode"] as? String else { return false }
-    if (mode == "image" || mode == "imageBlur"), UIImage(named: "SecureScreenPrivacyImage") == nil { return false }
+    // A missing SecureScreenPrivacyImage asset no longer refuses the call:
+    // returning false left the App Switcher showing live content, and the
+    // route observer (which ignores the result) never noticed. The overlay
+    // falls back instead (see makeOverlayView), so the screen stays hidden.
+    if (mode == "image" || mode == "imageBlur"), appSwitcherImageProvider() == nil {
+      NSLog(
+        "secure_screen_privacy: no \"SecureScreenPrivacyImage\" in the app's asset catalog; "
+          + "\(mode) mode falls back to \(mode == "image" ? "imageBackgroundColor" : "blur") in the App Switcher.")
+    }
 
     appSwitcherMode = mode
     if let intensity = arguments?["blurIntensity"] as? String {
@@ -364,7 +375,13 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
       return UIVisualEffectView(
         effect: UIBlurEffect(style: SecureScreenPrivacyPlugin.blurStyle(forIntensity: appSwitcherBlurIntensity)))
     case "image":
-      guard let image = UIImage(named: "SecureScreenPrivacyImage") else { return nil }
+      // No image asset: a plain imageBackgroundColor cover, so the screen
+      // is still hidden.
+      guard let image = appSwitcherImageProvider() else {
+        let colorView = UIView()
+        colorView.backgroundColor = appSwitcherImageBackgroundColor
+        return colorView
+      }
       let imageView = UIImageView(image: image)
       // .scaleAspectFit (not .scaleAspectFill) so the whole image is visible
       // rather than cropped when its aspect ratio doesn't match the window's -
@@ -380,8 +397,12 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
       // Same sharp image as "image" mode, over a live UIVisualEffectView
       // blur of whatever's behind the window. Both the blur and the sharp
       // image attach in one synchronous step, so there's never a frame
-      // where one is visible without the other.
-      guard let image = UIImage(named: "SecureScreenPrivacyImage") else { return nil }
+      // where one is visible without the other. No image asset: just the
+      // blur, so the screen is still hidden.
+      guard let image = appSwitcherImageProvider() else {
+        return UIVisualEffectView(
+          effect: UIBlurEffect(style: SecureScreenPrivacyPlugin.blurStyle(forIntensity: appSwitcherBlurIntensity)))
+      }
       let container = UIView()
 
       let blurView = UIVisualEffectView(

@@ -70,6 +70,46 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(window.rootViewController?.view.subviews.count, 0)
   }
 
+  // MARK: - Image modes without the SecureScreenPrivacyImage asset
+
+  func testImageMode_withoutImageAsset_isEnabledAndCoversWithBackgroundColor() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.appSwitcherImageProvider = { nil }
+
+    var enabled: Any?
+    plugin.handle(FlutterMethodCall(
+      methodName: "enableAppSwitcherProtection",
+      arguments: ["mode": "image", "imageBackgroundColor": 0xFFFF0000])) { enabled = $0 }
+    XCTAssertEqual(enabled as? Bool, true)
+
+    plugin.sceneWillResignActive(scene)
+
+    XCTAssertTrue(plugin.hasOverlay(on: window))
+    let cover = try XCTUnwrap(window.rootViewController?.view.subviews.first)
+    XCTAssertEqual(cover.backgroundColor, UIColor(red: 1, green: 0, blue: 0, alpha: 1))
+    plugin.sceneDidBecomeActive(scene)
+  }
+
+  func testImageBlurMode_withoutImageAsset_isEnabledAndCoversWithBlur() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.appSwitcherImageProvider = { nil }
+
+    var enabled: Any?
+    plugin.handle(FlutterMethodCall(
+      methodName: "enableAppSwitcherProtection", arguments: ["mode": "imageBlur"])) { enabled = $0 }
+    XCTAssertEqual(enabled as? Bool, true)
+
+    plugin.sceneWillResignActive(scene)
+
+    XCTAssertTrue(plugin.hasOverlay(on: window))
+    XCTAssertTrue(window.rootViewController?.view.subviews.first is UIVisualEffectView)
+    plugin.sceneDidBecomeActive(scene)
+  }
+
   func testSceneWillResignActive_firedTwice_addsOnlyOneOverlay() throws {
     let scene = try hostScene()
     let window = makeVisibleWindow(in: scene)
