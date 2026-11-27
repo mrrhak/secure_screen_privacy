@@ -152,8 +152,9 @@ class SecureScreenPrivacyPlugin :
     }
 
     // API 34+: Activity.ScreenCaptureCallback fires exactly once per
-    // screenshot, only while this app's Activity is visible, and never when
-    // the window has FLAG_SECURE (the screenshot is blocked anyway). Needs
+    // screenshot, only while this app's Activity is visible. It still fires
+    // when the window has FLAG_SECURE (the saved image is black), as seen on
+    // API 34 and 37 emulators. Needs
     // the install-time DETECT_SCREEN_CAPTURE permission declared in this
     // plugin's AndroidManifest.xml - not a storage/media permission.
     @Suppress("NewApi")

@@ -128,8 +128,7 @@ Detection is best-effort and has real platform-specific caveats:
 
 > **Android 14+ (API 34+):** uses the OS's own screenshot callback, so each
 > screenshot of your app is reported exactly once. It only fires while your
-> app's screen is visible, and not at all while capture protection
-> (`FLAG_SECURE`) is on, since the screenshot is blocked anyway. The plugin
+> app's screen is visible. The plugin
 > declares the `DETECT_SCREEN_CAPTURE` permission for this. It's an
 > install-time permission, never shown to the user, not a storage/media
 > permission, and it's merged into your app's manifest automatically.
@@ -146,6 +145,12 @@ Detection is best-effort and has real platform-specific caveats:
 > screenshot produces are merged into one event (anything within 1.5 seconds
 > of the last event is dropped). New images saved by other apps can still be
 > reported. Not confirmed across real hardware/OEM variance.
+
+> **Android, while capture protection is on:** a screenshot attempt is still
+> reported on every Android version, even though the saved image is black
+> (`FLAG_SECURE` blanks the content but doesn't stop the system from taking
+> the screenshot). Use the event to react to the attempt; the content itself
+> stayed hidden.
 
 > **iOS note:** uses `UIApplication.userDidTakeScreenshotNotification`, which
 > never provides a file path or image data — this is why the payload is
