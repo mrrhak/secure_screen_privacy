@@ -116,4 +116,61 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(windows.contains { $0 === window })
     XCTAssertTrue(windows.allSatisfy { $0.windowScene === scene })
   }
+
+  // MARK: - App switcher overlay covers presented screens too
+
+  func testSceneWillResignActive_alsoCoversAPresentedScreen() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let presented = UIViewController()
+    presented.modalPresentationStyle = .fullScreen
+    window.rootViewController?.present(presented, animated: false)
+    XCTAssertTrue(window.rootViewController?.presentedViewController === presented)
+    let plugin = SecureScreenPrivacyPlugin()
+    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+
+    plugin.sceneWillResignActive(scene)
+
+    XCTAssertEqual(window.rootViewController?.view.subviews.count, 1)
+    XCTAssertEqual(presented.view.subviews.count, 1)
+    XCTAssertEqual(presented.view.subviews.first?.frame, presented.view.bounds)
+
+    plugin.sceneDidBecomeActive(scene)
+
+    XCTAssertFalse(plugin.hasOverlay(on: window))
+    XCTAssertEqual(window.rootViewController?.view.subviews.count, 0)
+    XCTAssertEqual(presented.view.subviews.count, 0)
+    presented.dismiss(animated: false)
+  }
+
+  func testOverlayHosts_followsTheWholePresentationChain() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let first = UIViewController()
+    let second = UIViewController()
+    first.modalPresentationStyle = .fullScreen
+    second.modalPresentationStyle = .fullScreen
+    window.rootViewController?.present(first, animated: false)
+    // Let the first presentation finish before presenting on top of it.
+    RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+    first.present(second, animated: false)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+    XCTAssertTrue(first.presentedViewController === second)
+
+    let hosts = SecureScreenPrivacyPlugin.overlayHosts(in: window)
+
+    try XCTSkipUnless(hosts.count == 3, "presentation chain not set up: \(hosts.count) hosts")
+    XCTAssertTrue(hosts[0] === window.rootViewController?.view)
+    XCTAssertTrue(hosts[1] === first.view)
+    XCTAssertTrue(hosts[2] === second.view)
+    second.dismiss(animated: false)
+    first.dismiss(animated: false)
+  }
+
+  func testOverlayHosts_withNoRootViewController_isTheWindow() throws {
+    let scene = try hostScene()
+    let window = UIWindow(windowScene: scene)
+
+    XCTAssertTrue(SecureScreenPrivacyPlugin.overlayHosts(in: window).first === window)
+  }
 }
