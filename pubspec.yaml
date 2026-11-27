@@ -1,7 +1,8 @@
 name: secure_screen_privacy
 description: "Flutter plugin for capture protection (block screenshots/recording) and app switcher/recents privacy overlays on Android and iOS."
 version: 0.0.1
-homepage:
+repository: https://github.com/mrrhak/secure_screen_privacy
+issue_tracker: https://github.com/mrrhak/secure_screen_privacy/issues
 
 environment:
   sdk: ^3.12.2

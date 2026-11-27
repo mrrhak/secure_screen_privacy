@@ -10,11 +10,11 @@ Pod::Spec.new do |s|
 Flutter plugin for capture protection (block screenshots/recording) and app
 switcher/recents privacy overlays on iOS.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/mrrhak/secure_screen_privacy'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = 'Mrr Hak'
   s.source           = { :path => '.' }
-  s.source_files = 'secure_screen_privacy/Sources/secure_screen_privacy/**/*'
+  s.source_files = 'secure_screen_privacy/Sources/secure_screen_privacy/**/*.swift'
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
 
@@ -26,5 +26,5 @@ switcher/recents privacy overlays on iOS.
   # required reason APIs, update the PrivacyInfo.xcprivacy file to describe your
   # plugin's privacy impact, and then uncomment this line. For more information,
   # see https://developer.apple.com/documentation/bundleresources/privacy_manifest_files
-  # s.resource_bundles = {'secure_screen_privacy_privacy' => ['secure_screen_privacy/Sources/secure_screen_privacy/PrivacyInfo.xcprivacy']}
+  s.resource_bundles = {'secure_screen_privacy_privacy' => ['secure_screen_privacy/Sources/secure_screen_privacy/PrivacyInfo.xcprivacy']}
 end
