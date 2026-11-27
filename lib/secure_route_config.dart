@@ -29,8 +29,8 @@ class SecureRouteConfig {
   /// Applies to [AppSwitcherProtectionMode.color].
   final int color;
 
-  /// Applies to [AppSwitcherProtectionMode.image] and
-  /// [AppSwitcherProtectionMode.imageBlur].
+  /// Applies to [AppSwitcherProtectionMode.image] only
+  /// ([AppSwitcherProtectionMode.imageBlur] shows the blur behind the image).
   final int imageBackgroundColor;
 
   @override

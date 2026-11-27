@@ -4,14 +4,15 @@ enum AppSwitcherProtectionMode {
   /// Blurs a snapshot of the current screen.
   blur,
 
-  /// Shows a static image supplied by the host app.
+  /// Shows a static image supplied by the host app, on
+  /// `imageBackgroundColor`. Without the image asset it shows just that
+  /// color.
   image,
 
   /// Shows a solid color.
   color,
 
-  /// Shows a static image supplied by the host app over a live blurred
-  /// snapshot of the current screen, falling back to [imageBackgroundColor]
-  /// wherever the blur isn't ready yet or isn't available at all.
+  /// Shows a static image supplied by the host app over a live blur of the
+  /// current screen. Without the image asset it shows just the blur.
   imageBlur,
 }
