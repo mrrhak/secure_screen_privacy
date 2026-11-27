@@ -38,13 +38,12 @@ await privacy.enableAppSwitcherProtection(
 
 await privacy.enableAppSwitcherProtection(
   AppSwitcherProtectionMode.image,
-  imageBackgroundColor: 0xFF000000, // image/imageBlur, ARGB
+  imageBackgroundColor: 0xFF000000, // image only, ARGB
 );
 
 await privacy.enableAppSwitcherProtection(
   AppSwitcherProtectionMode.imageBlur,
   blurIntensity: BlurIntensity.medium, // blur intensity
-  imageBackgroundColor: 0xFF000000, // fallback background, ARGB
 );
 
 await privacy.disableAppSwitcherProtection();
@@ -88,13 +87,10 @@ no equivalent resource requirement, since it doesn't render an image
 overlay.
 
 > **`imageBlur` note:** shows the same bundled image as `image` mode, but
-> over a live blurred snapshot of the screen instead of a solid color. Blur
-> is always attempted (the same pipeline `blur` mode uses); it's computed
-> asynchronously, and rather than showing a solid-color placeholder in the
-> meantime (which read as a jarring flicker once the blur popped in), the
-> sharp image appears immediately with a transparent background, so
-> whatever's behind it is visible, unblurred, for that brief window until
-> the blur is ready and gets inserted behind it.
+> over a live blur of the screen (the same blur `blur` mode uses) instead of
+> a solid color, so `imageBackgroundColor` isn't used. The blur and the
+> image appear together in one step, so there's no moment where one shows
+> without the other.
 
 > **iOS note:** if `enableCaptureProtection` is also on, it's transiently
 > disabled while the overlay is shown (otherwise the OS would blank the

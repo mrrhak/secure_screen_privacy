@@ -35,13 +35,13 @@ class SecureScreenPrivacy {
   /// [AppSwitcherProtectionMode.imageBlur].
   /// [color] (as an ARGB int, e.g. `0xFF000000`) only applies to
   /// [AppSwitcherProtectionMode.color].
-  /// [imageBackgroundColor] (as an ARGB int) applies to
-  /// [AppSwitcherProtectionMode.image] and [AppSwitcherProtectionMode.imageBlur]
-  /// - it fills the letterbox/pillarbox bars left when the image's aspect
-  /// ratio doesn't match the screen's, and shows through any transparent
-  /// areas of the image itself. For [AppSwitcherProtectionMode.imageBlur] it
-  /// is also the fallback background wherever the live blur isn't ready yet
-  /// or isn't available at all.
+  /// [imageBackgroundColor] (as an ARGB int) only applies to
+  /// [AppSwitcherProtectionMode.image] - it fills the letterbox/pillarbox
+  /// bars left when the image's aspect ratio doesn't match the screen's,
+  /// shows through any transparent areas of the image itself, and is the
+  /// whole cover if the image asset is missing.
+  /// [AppSwitcherProtectionMode.imageBlur] shows the blur in those places
+  /// instead.
   ///
   /// **Android note:** [mode] and the styling parameters above are iOS-only.
   /// Android instead relies solely on `FLAG_SECURE` for the entire time

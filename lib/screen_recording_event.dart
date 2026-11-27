@@ -1,9 +1,8 @@
 /// A screen recording state transition.
 ///
-/// See the README for platform-specific reliability caveats — in particular,
-/// on Android 14 (API 34) [isRecording] can only ever be reported as `true`
-/// (no OS "stopped" signal exists on that API level alone); cancelling and
-/// re-subscribing to `screenRecordingEvents` is the only way to reset it.
+/// See the README for platform-specific caveats — in particular, Android
+/// only reports recording on Android 15 (API 35) and newer; older versions
+/// emit no events at all.
 class ScreenRecordingEvent {
   const ScreenRecordingEvent(this.isRecording, this.timestamp);
 
