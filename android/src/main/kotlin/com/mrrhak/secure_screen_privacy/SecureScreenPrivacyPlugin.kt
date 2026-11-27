@@ -281,7 +281,9 @@ class SecureScreenPrivacyPlugin :
         if (shouldEmitScreenshotEvent(displayName, relativePathOrData, dateAddedMillis, now) &&
             screenshotDeduper.shouldEmit(now)
         ) {
-            val payload = mapOf("timestamp" to (dateAddedMillis ?: System.currentTimeMillis()))
+            // Detection time, like the API 34+ path and iOS. DATE_ADDED is
+            // only whole seconds, so it would read up to a second early.
+            val payload = mapOf("timestamp" to now)
             Handler(Looper.getMainLooper()).post {
                 screenshotEventSink?.success(payload)
             }

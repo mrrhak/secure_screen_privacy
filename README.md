@@ -207,15 +207,3 @@ permission, which the plugin declares for you and the user never sees).
 > a single observer correctly reports both start and stop. There's no de-duplication: a notification for an
 > unrelated screen/scene (e.g. an external display in a multi-scene app) can
 > re-emit an unchanged value.
-
-## Getting Started
-
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/to/develop-plugins),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-
