@@ -22,7 +22,7 @@ Run all commands from the repo root unless noted.
 - Run all Dart tests: `flutter test`
 - Run a single Dart test: `flutter test test/secure_screen_privacy_test.dart`
 - Run Android native unit tests: `cd example/android && ./gradlew :secure_screen_privacy:testDebugUnitTest` (or open `example/android` in Android Studio). The plugin's own `android/` folder has no Gradle wrapper and can't build alone: it needs the Flutter Gradle plugin, which only the example app's build brings in. On a fresh clone run `cd example && flutter build apk --config-only` once first, so `example/android/local.properties` exists. Gradle needs JDK 17 or newer; if the system `java` is older, point `JAVA_HOME` at Android Studio's bundled JDK.
-- Run the example app: `cd example && flutter run`
+- Run the example app: `cd example && flutter run` — three tabs: Protect (manual capture and App Switcher protection, with a preview of the iOS cover), Detect (screenshot and recording listeners with one timeline) and Routes (`SecureScreenPrivacyNavigatorObserver` policies for pages, a named dialog and a bottom sheet; the policies live in `example/lib/src/routes_tab.dart`). Every screen sits on a busy background drawn in code (`ColorfulBackground`) so the App Switcher blur is easy to see.
 - Run integration test on a device/emulator: `cd example && flutter test integration_test/plugin_integration_test.dart`
 
 ## Architecture

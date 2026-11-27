@@ -1,27 +1,54 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:ui';
 
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secure_screen_privacy_example/main.dart';
 
 void main() {
-  testWidgets('Verify Platform version', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  // A tall phone, so every row of the lazily built lists is on screen.
+  setUp(() {
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
+    view.physicalSize = const Size(1200, 6000);
+    view.devicePixelRatio = 3;
+  });
+  tearDown(() {
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
+    view.resetPhysicalSize();
+    view.resetDevicePixelRatio();
+  });
 
-    // Verify that platform version is retrieved.
-    expect(
-      find.byWidgetPredicate(
-        (Widget widget) =>
-            widget is Text && widget.data!.startsWith('Running on:'),
-      ),
-      findsOneWidget,
-    );
+  testWidgets('shows the three tabs and switches between them', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+
+    expect(find.text('Block screenshots & recording'), findsOneWidget);
+    expect(find.text('Hide in App Switcher'), findsOneWidget);
+
+    await tester.tap(find.text('Detect').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Listen for screenshots'), findsOneWidget);
+    expect(find.text('Listen for screen recording'), findsOneWidget);
+
+    await tester.tap(find.text('Routes').last);
+    await tester.pumpAndSettle();
+    expect(find.text('PIN dialog'), findsOneWidget);
+    expect(find.text('Statement bottom sheet'), findsOneWidget);
+  });
+
+  testWidgets('blur intensity only shows for blur modes', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+    expect(find.text('Blur intensity'), findsOneWidget);
+
+    await tester.tap(find.text('Color'));
+    await tester.pumpAndSettle();
+    expect(find.text('Blur intensity'), findsNothing);
+    expect(find.text('Cover color'), findsOneWidget);
   });
 }
