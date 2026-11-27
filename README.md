@@ -23,7 +23,7 @@ final isEnabled = await privacy.isCaptureProtectionEnabled();
 ```
 
 > **Note:** with only `enableCaptureProtection` on (no app switcher protection),
-> the OS app switcher / recents preview will show a plain black card while
+> the OS app switcher / recents preview will show a plain blank card while
 > backgrounded. That's the underlying OS mechanism itself — Android's
 > `FLAG_SECURE` and iOS's secure-text-entry trick both blank any capture of
 > the window, including the app switcher snapshot, not just screenshots/
@@ -65,26 +65,10 @@ final isEnabled = await privacy.isAppSwitcherProtectionEnabled();
 `blurIntensity` has four levels — `ultraLight` (default), `light`, `medium`,
 `heavy` — mapped on iOS to increasingly opaque `UIBlurEffect` materials.
 
-> **Platform difference:** `mode` and the styling parameters above
-> (`blurIntensity`/`color`/`imageBackgroundColor`) are **iOS-only**. On
-> Android, `enableAppSwitcherProtection` always relies solely on
-> `FLAG_SECURE` for the entire time protection is enabled, showing a plain
-> black/secure card in the app switcher regardless of `mode` — no custom
-> overlay is rendered there. This is deliberate, not a missing feature: on
-> Android, none of a custom overlay view, `RenderEffect` blur, or
-> `PixelCopy`-based capture protects the live gesture-nav "swipe up and
-> hold" recents peek (the OS composites the app's actual on-screen window
-> directly during that gesture, which isn't a capture/cast/recording at
-> all), so `FLAG_SECURE` alone already provides the maximum protection
-> Android allows, and a custom overlay would only add implementation cost
-> with no additional coverage. `mode` is still required (and still selects
-> real behavior) on iOS, whose secure-window mechanism doesn't have this
-> gesture-peek gap.
-
 Shows a blur, a static image (optionally over a blurred backdrop), or a
 solid color in the iOS App Switcher preview instead of your live UI
-whenever the app is backgrounded (Android always shows a plain
-black/secure card instead, per the note above).
+whenever the app is backgrounded (Android shows a plain card instead, see
+[Android: a plain card in a colour you choose](#android-a-plain-card-in-a-colour-you-choose)).
 
 `AppSwitcherProtectionMode.image` and `AppSwitcherProtectionMode.imageBlur`
 require the host app to bundle an image set named `SecureScreenPrivacyImage`
@@ -113,6 +97,46 @@ overlay.
 > That hook also fires on transient interruptions (incoming call, Siri,
 > Control Center, share sheet), so the overlay will briefly flash in those
 > cases too — this is inherent to the technique, not a bug.
+
+#### Android: a plain card in a colour you choose
+
+Android can't draw a blur or an image in the App Switcher. While protection
+is on, it shows a **plain card** instead, with your app's content hidden.
+
+On **Android 13 (API 33) and newer** the plugin sets that card's colour:
+
+| `mode` | Card colour on Android |
+| --- | --- |
+| `color` | `color` |
+| `image` | `imageBackgroundColor` |
+| `blur`, `imageBlur` | your app theme's background colour (`android:colorBackground`), following dark/light mode straight away |
+| capture protection only | your app theme's background colour |
+
+`blurIntensity` is ignored on Android. On **Android 12 and older** the card
+uses the theme's background colour as it was when the app started, so after a
+dark/light switch it keeps the old colour until the app restarts.
+
+<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain teal card for the protected app in color mode">
+
+The card colour is set with `Activity.setTaskDescription`. The plugin keeps
+the label and colours Flutter sets there (from `MaterialApp.title` and
+`color`), but if your app calls `setTaskDescription` with its own icon, that
+icon isn't kept while protection is on.
+
+Why not a real blur or image cover on Android?
+
+- Protection on Android uses `FLAG_SECURE`, and Android leaves the content
+  out of the App Switcher picture of a `FLAG_SECURE` window, so anything an
+  app draws there is left out too. A cover would only show with
+  `FLAG_SECURE` off, which would also let screenshots through.
+- A blur never makes it into the App Switcher picture: Android takes the
+  picture before a blur can finish drawing.
+- No app-level technique (a custom cover, a `RenderEffect` blur,
+  `PixelCopy`, or `FLAG_SECURE` itself) hides the app's live screen while it
+  is still open: opening the App Switcher straight from the app, or the
+  "swipe up and hold" gesture, shows the real screen for that moment, because
+  Android draws the app's actual window there. Once the app is in the
+  background, its card is blank. This is a known Android limit.
 
 ### Per-route protection
 
