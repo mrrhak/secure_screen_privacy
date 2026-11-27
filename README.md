@@ -23,7 +23,7 @@ final isEnabled = await privacy.isCaptureProtectionEnabled();
 ```
 
 > **Note:** with only `enableCaptureProtection` on (no app switcher protection),
-> the OS app switcher / recents preview will show a plain blank card while
+> the OS app switcher / recents preview will show a plain black card while
 > backgrounded. That's the underlying OS mechanism itself — Android's
 > `FLAG_SECURE` and iOS's secure-text-entry trick both blank any capture of
 > the window, including the app switcher snapshot, not just screenshots/
@@ -65,11 +65,26 @@ final isEnabled = await privacy.isAppSwitcherProtectionEnabled();
 `blurIntensity` has four levels — `ultraLight` (default), `light`, `medium`,
 `heavy` — mapped on iOS to increasingly opaque `UIBlurEffect` materials.
 
+> **Platform difference:** `mode` and the styling parameters above
+> (`blurIntensity`/`color`/`imageBackgroundColor`) are **iOS-only**. On
+> Android, `enableAppSwitcherProtection` always relies solely on
+> `FLAG_SECURE` for the entire time protection is enabled, showing a plain
+> black/secure card in the app switcher regardless of `mode` — no custom
+> overlay is rendered there. This is deliberate, not a missing feature: on
+> Android, none of a custom overlay view, `RenderEffect` blur, or
+> `PixelCopy`-based capture protects the live gesture-nav "swipe up and
+> hold" recents peek (the OS composites the app's actual on-screen window
+> directly during that gesture, which isn't a capture/cast/recording at
+> all), so `FLAG_SECURE` alone already provides the maximum protection
+> Android allows, and a custom overlay would only add implementation cost
+> with no additional coverage. `mode` is still required (and still selects
+> real behavior) on iOS, whose secure-window mechanism doesn't have this
+> gesture-peek gap.
+
 Shows a blur, a static image (optionally over a blurred backdrop), or a
 solid color in the iOS App Switcher preview instead of your live UI
 whenever the app is backgrounded (Android always shows a plain
-blank card instead, see
-[Android: always a plain blank card](#android-always-a-plain-blank-card)).
+black/secure card instead, per the note above).
 
 `AppSwitcherProtectionMode.image` and `AppSwitcherProtectionMode.imageBlur`
 require the host app to bundle an image set named `SecureScreenPrivacyImage`
@@ -98,36 +113,6 @@ overlay.
 > That hook also fires on transient interruptions (incoming call, Siri,
 > Control Center, share sheet), so the overlay will briefly flash in those
 > cases too — this is inherent to the technique, not a bug.
-
-#### Android: always a plain blank card
-
-On Android the App Switcher shows a **plain blank card** while protection is
-on: usually black, sometimes filled with your app's background color (white
-with the default light theme). Your app's content is hidden either way.
-`mode`, `blurIntensity`, `color` and `imageBackgroundColor` only change the
-look **on iOS**. Android accepts them, so the same Dart code runs on both
-platforms, but ignores them.
-
-<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain blank card for the protected app">
-
-This is deliberate, not a missing feature or a bug:
-
-- Protection on Android uses `FLAG_SECURE`, and Android leaves the content
-  out of the App Switcher picture of a `FLAG_SECURE` window. A custom color
-  or image would only show if `FLAG_SECURE` were off, which would also let
-  screenshots through.
-- A blur never makes it into the App Switcher picture: Android takes the
-  picture before a blur can finish drawing.
-- No app-level technique (a custom cover, a `RenderEffect` blur,
-  `PixelCopy`, or `FLAG_SECURE` itself) hides the app's live screen while it
-  is still open: opening the App Switcher straight from the app, or the
-  "swipe up and hold" gesture, shows the real screen for that moment, because
-  Android draws the app's actual window there. Once the app is in the
-  background, its card is blank. This is a known Android limit.
-
-So `FLAG_SECURE` alone already gives the most protection Android allows, and
-a blank card is what users see from banking and password apps too. `mode`
-is still required, and still matters, on iOS.
 
 ### Per-route protection
 
