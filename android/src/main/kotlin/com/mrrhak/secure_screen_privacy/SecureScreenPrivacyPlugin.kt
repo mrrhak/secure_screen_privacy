@@ -74,7 +74,6 @@ class SecureScreenPrivacyPlugin :
     private var screenRecordingEventSink: EventChannel.EventSink? = null
     private var isRecordingListening = false
     private var screenRecordingCallback: Consumer<Int>? = null // API 35+ only
-    private var screenCaptureCallback: Activity.ScreenCaptureCallback? = null // API 34 only
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         appContext = flutterPluginBinding.applicationContext
@@ -289,18 +288,18 @@ class SecureScreenPrivacyPlugin :
     // ContentObserver - both detection APIs here require a live Activity.
     //
     // API 35+: WindowManager.addScreenRecordingCallback gives true start AND
-    // stop detection. API 34: Activity.ScreenCaptureCallback fires once when
-    // recording starts, with NO corresponding stop callback at the OS level
-    // - isRecording is emitted true and never auto-reset to false; the Dart
-    // subscriber must cancel and re-subscribe to reset it. This matches the
-    // sibling no_screenshot plugin's behavior exactly. Below API 34: no-op.
+    // stop detection (needs the install-time DETECT_SCREEN_RECORDING
+    // permission declared in this plugin's AndroidManifest.xml). Below API 35:
+    // no-op. Android 14 has no screen-recording signal at all:
+    // Activity.ScreenCaptureCallback, which an earlier version used here,
+    // fires for screenshots, not recordings, so it reported every screenshot
+    // as "recording started" and never saw a real recording.
 
     private fun registerScreenRecordingCallbacksIfNeeded() {
         if (!isRecordingListening) return
         val act = activity ?: return
         when (screenRecordingRegistrationPathForSdkInt(Build.VERSION.SDK_INT)) {
             ScreenRecordingRegistrationPath.WINDOW_MANAGER_CALLBACK -> registerWindowManagerRecordingCallback(act)
-            ScreenRecordingRegistrationPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK -> registerActivityScreenCaptureCallback(act)
             ScreenRecordingRegistrationPath.UNSUPPORTED -> {}
         }
     }
@@ -316,17 +315,15 @@ class SecureScreenPrivacyPlugin :
         // addScreenRecordingCallback also returns the current state
         // synchronously, so a late subscriber sees an already-in-progress
         // recording immediately rather than waiting for the next transition.
-        val initialState = act.windowManager.addScreenRecordingCallback(act.mainExecutor, callback)
+        val initialState = try {
+            act.windowManager.addScreenRecordingCallback(act.mainExecutor, callback)
+        } catch (e: SecurityException) {
+            // Only if a host app strips DETECT_SCREEN_RECORDING from the
+            // merged manifest - degrade to no detection instead of failing.
+            return
+        }
         screenRecordingCallback = callback
         emitScreenRecordingEvent(isRecordingStateVisible(initialState))
-    }
-
-    @Suppress("NewApi")
-    private fun registerActivityScreenCaptureCallback(act: Activity) {
-        if (screenCaptureCallback != null) return
-        val callback = Activity.ScreenCaptureCallback { emitScreenRecordingEvent(true) }
-        act.registerScreenCaptureCallback(act.mainExecutor, callback)
-        screenCaptureCallback = callback
     }
 
     private fun unregisterScreenRecordingCallbacks() {
@@ -334,10 +331,6 @@ class SecureScreenPrivacyPlugin :
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             screenRecordingCallback?.let { act?.windowManager?.removeScreenRecordingCallback(it) }
             screenRecordingCallback = null
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            screenCaptureCallback?.let { act?.unregisterScreenCaptureCallback(it) }
-            screenCaptureCallback = null
         }
     }
 
@@ -566,14 +559,12 @@ internal fun isMediaStoreChangeWorthChecking(flags: Int): Boolean =
 // unit-testable.
 internal enum class ScreenRecordingRegistrationPath {
     WINDOW_MANAGER_CALLBACK, // API 35+: true start/stop detection
-    ACTIVITY_SCREEN_CAPTURE_CALLBACK, // API 34: start-only, no stop signal
-    UNSUPPORTED // < API 34: graceful no-op
+    UNSUPPORTED // < API 35: graceful no-op (Android 14 has no recording signal)
 }
 
 internal fun screenRecordingRegistrationPathForSdkInt(sdkInt: Int): ScreenRecordingRegistrationPath =
     when {
         sdkInt >= Build.VERSION_CODES.VANILLA_ICE_CREAM -> ScreenRecordingRegistrationPath.WINDOW_MANAGER_CALLBACK
-        sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> ScreenRecordingRegistrationPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK
         else -> ScreenRecordingRegistrationPath.UNSUPPORTED
     }
 

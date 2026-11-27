@@ -239,8 +239,8 @@ class _HomeScreenState extends State<_HomeScreen> {
 
   // Subscribing to the stream IS starting native recording detection;
   // cancelling IS stopping it - there's no separate start/stop method. On
-  // Android 14 (API 34) isRecording can only ever report true; cancel and
-  // re-subscribe to reset it after recording actually stops.
+  // Android it needs Android 15 (API 35) or newer; older versions emit
+  // nothing.
   void _toggleScreenRecordingListening(bool listen) {
     if (listen) {
       _screenRecordingSubscription = _secureScreenPrivacyPlugin
@@ -448,8 +448,7 @@ class _HomeScreenState extends State<_HomeScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Text(
-                  'On Android 14 (API 34) this can only report recording '
-                  'started - cancel and re-subscribe to reset after it stops.',
+                  'On Android this needs Android 15 (API 35) or newer.',
                   textAlign: TextAlign.center,
                 ),
               ),
