@@ -173,4 +173,74 @@ class RunnerTests: XCTestCase {
 
     XCTAssertTrue(SecureScreenPrivacyPlugin.overlayHosts(in: window).first === window)
   }
+
+  // MARK: - Screenshot events: one screenshot, one event
+
+  func testScreenshotDeduper_dropsARepeatInsideTheWindow() {
+    var deduper = ScreenshotEventDeduper()
+    XCTAssertTrue(deduper.shouldEmit(at: 100.000))
+    XCTAssertFalse(deduper.shouldEmit(at: 100.003))
+    XCTAssertFalse(deduper.shouldEmit(at: 100.4))
+  }
+
+  func testScreenshotDeduper_reportsAScreenshotAfterTheWindow() {
+    var deduper = ScreenshotEventDeduper()
+    XCTAssertTrue(deduper.shouldEmit(at: 100.0))
+    XCTAssertTrue(deduper.shouldEmit(at: 100.0 + ScreenshotEventDeduper.window))
+    XCTAssertFalse(deduper.shouldEmit(at: 100.6))
+    XCTAssertTrue(deduper.shouldEmit(at: 101.2))
+  }
+
+  func testScreenshotDeduper_resetForgetsTheLastScreenshot() {
+    var deduper = ScreenshotEventDeduper()
+    XCTAssertTrue(deduper.shouldEmit(at: 100.0))
+    deduper.reset()
+    XCTAssertTrue(deduper.shouldEmit(at: 100.1))
+  }
+
+  func testScreenshotDeduper_clockGoingBackwardsStillReports() {
+    var deduper = ScreenshotEventDeduper()
+    XCTAssertTrue(deduper.shouldEmit(at: 100.0))
+    XCTAssertTrue(deduper.shouldEmit(at: 50.0))
+  }
+
+  // The real-device bug: iOS posted userDidTakeScreenshotNotification twice
+  // for one screenshot and both reached Dart.
+  func testDuplicateScreenshotNotifications_reachTheSinkOnce() {
+    let plugin = SecureScreenPrivacyPlugin()
+    var events: [Any?] = []
+    _ = plugin.onListen(withArguments: nil) { events.append($0) }
+    defer { _ = plugin.onCancel(withArguments: nil) }
+
+    NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: UIApplication.shared)
+    NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: UIApplication.shared)
+    drainMainQueue()
+
+    XCTAssertEqual(events.count, 1)
+    let payload = events.first as? [String: Any]
+    XCTAssertNotNil(payload?["timestamp"] as? Int64)
+  }
+
+  func testScreenshotAfterRelisten_isReportedEvenInsideTheWindow() {
+    let plugin = SecureScreenPrivacyPlugin()
+    var events: [Any?] = []
+    _ = plugin.onListen(withArguments: nil) { events.append($0) }
+    plugin.handleScreenshotTaken()
+    drainMainQueue()
+    _ = plugin.onCancel(withArguments: nil)
+
+    // Subscribing again well inside the window must start fresh.
+    _ = plugin.onListen(withArguments: nil) { events.append($0) }
+    defer { _ = plugin.onCancel(withArguments: nil) }
+    plugin.handleScreenshotTaken()
+    drainMainQueue()
+
+    XCTAssertEqual(events.count, 2)
+  }
+
+  private func drainMainQueue() {
+    let delivered = expectation(description: "main queue drained")
+    DispatchQueue.main.async { delivered.fulfill() }
+    wait(for: [delivered], timeout: 1)
+  }
 }
