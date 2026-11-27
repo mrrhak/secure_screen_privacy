@@ -70,6 +70,27 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(window.rootViewController?.view.subviews.count, 0)
   }
 
+  // MARK: - Capture protection only moves the window when turned on
+
+  func testDisableCaptureProtection_neverMovesTheWindow() throws {
+    _ = try hostScene()
+    let plugin = SecureScreenPrivacyPlugin()
+
+    call(plugin, "disableCaptureProtection")
+
+    XCTAssertFalse(plugin.isWindowAttachedToSecureField)
+  }
+
+  func testDisableCaptureProtection_onBecomeActive_stillNeverMovesTheWindow() throws {
+    let scene = try hostScene()
+    let plugin = SecureScreenPrivacyPlugin()
+
+    call(plugin, "disableCaptureProtection")
+    plugin.sceneDidBecomeActive(scene)
+
+    XCTAssertFalse(plugin.isWindowAttachedToSecureField)
+  }
+
   // MARK: - Image modes without the SecureScreenPrivacyImage asset
 
   func testImageMode_withoutImageAsset_isEnabledAndCoversWithBackgroundColor() throws {

@@ -1,6 +1,7 @@
 ## 0.0.1
 
 * Initial release.
+* Fix iOS `disableCaptureProtection` moving the app's window under the secure text field even though protection was off. With `SecureScreenPrivacyNavigatorObserver` this happened at startup in every app, since the first route disables protection. Only enabling does it now.
 * Fix iOS `image`/`imageBlur` app switcher modes turning protection off entirely when the host app has no `SecureScreenPrivacyImage` asset (the call returned `false`, which `SecureScreenPrivacyNavigatorObserver` ignores). They now fall back to a plain `imageBackgroundColor` cover / plain blur and log a warning.
 * Add `enableCaptureProtection`/`disableCaptureProtection`/`isCaptureProtectionEnabled` to block screenshots and screen recording.
 * Add `enableAppSwitcherProtection`/`disableAppSwitcherProtection`/`isAppSwitcherProtectionEnabled` with `AppSwitcherProtectionMode` (blur/image/color) to customize the OS app switcher/recents preview.
