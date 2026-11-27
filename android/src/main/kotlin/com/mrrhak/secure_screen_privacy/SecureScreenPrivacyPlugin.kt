@@ -74,6 +74,7 @@ class SecureScreenPrivacyPlugin :
     private var screenRecordingEventSink: EventChannel.EventSink? = null
     private var isRecordingListening = false
     private var screenRecordingCallback: Consumer<Int>? = null // API 35+ only
+    private val screenRecordingStateDeduper = ScreenRecordingStateDeduper()
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         appContext = flutterPluginBinding.applicationContext
@@ -97,6 +98,8 @@ class SecureScreenPrivacyPlugin :
             override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
                 screenRecordingEventSink = events
                 isRecordingListening = true
+                // A new subscriber always gets the current state first.
+                screenRecordingStateDeduper.reset()
                 // Below API 35 there's nothing to register, so tell the
                 // subscriber once that the state is unknown instead of
                 // sending nothing. Sent here, not on Activity attach, so it
@@ -352,7 +355,12 @@ class SecureScreenPrivacyPlugin :
     // unlike handleMediaStoreChange's ContentObserver (which genuinely runs
     // off-main) - no Handler(Looper.getMainLooper()).post() hop needed here.
     // null means "can't tell" (Dart maps it to ScreenRecordingState.unknown).
+    //
+    // Only a change of state is sent: re-registering on Activity recreation
+    // (rotation, dark mode...) reports the current state again, which used
+    // to reach Dart as a repeat of the state it already had.
     private fun emitScreenRecordingEvent(isRecording: Boolean?) {
+        if (!screenRecordingStateDeduper.shouldEmit(isRecording)) return
         screenRecordingEventSink?.success(
             mapOf("isRecording" to isRecording, "timestamp" to System.currentTimeMillis())
         )
@@ -590,3 +598,23 @@ internal fun screenRecordingRegistrationPathForSdkInt(sdkInt: Int): ScreenRecord
 @Suppress("NewApi")
 internal fun isRecordingStateVisible(state: Int): Boolean =
     state == WindowManager.SCREEN_RECORDING_STATE_VISIBLE
+
+// Lets a screen recording state through only when it differs from the last
+// one sent (null, "unknown", counts as a state of its own). Framework-free
+// so it's unit-testable; only touched from the main thread.
+internal class ScreenRecordingStateDeduper {
+    private var hasEmitted = false
+    private var lastState: Boolean? = null
+
+    fun shouldEmit(state: Boolean?): Boolean {
+        if (hasEmitted && state == lastState) return false
+        hasEmitted = true
+        lastState = state
+        return true
+    }
+
+    fun reset() {
+        hasEmitted = false
+        lastState = null
+    }
+}

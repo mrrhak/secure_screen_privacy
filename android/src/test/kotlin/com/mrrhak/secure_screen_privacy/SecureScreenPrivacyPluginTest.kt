@@ -488,4 +488,35 @@ internal class SecureScreenPrivacyPluginTest {
         assertTrue(isMediaStoreChangeWorthChecking(android.content.ContentResolver.NOTIFY_UPDATE))
         assertTrue(isMediaStoreChangeWorthChecking(0))
     }
+
+    @Test
+    fun screenRecordingStateDeduper_firstState_isEmitted() {
+        assertTrue(ScreenRecordingStateDeduper().shouldEmit(false))
+    }
+
+    @Test
+    fun screenRecordingStateDeduper_sameStateAgain_isDropped() {
+        val deduper = ScreenRecordingStateDeduper()
+        assertTrue(deduper.shouldEmit(true))
+        assertFalse(deduper.shouldEmit(true))
+        assertTrue(deduper.shouldEmit(false))
+        assertFalse(deduper.shouldEmit(false))
+    }
+
+    @Test
+    fun screenRecordingStateDeduper_unknownIsItsOwnState() {
+        val deduper = ScreenRecordingStateDeduper()
+        assertTrue(deduper.shouldEmit(null))
+        assertFalse(deduper.shouldEmit(null))
+        assertTrue(deduper.shouldEmit(false))
+        assertTrue(deduper.shouldEmit(null))
+    }
+
+    @Test
+    fun screenRecordingStateDeduper_reset_emitsTheSameStateAgain() {
+        val deduper = ScreenRecordingStateDeduper()
+        assertTrue(deduper.shouldEmit(true))
+        deduper.reset()
+        assertTrue(deduper.shouldEmit(true))
+    }
 }
