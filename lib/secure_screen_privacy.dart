@@ -1,4 +1,3 @@
-
 import 'app_switcher_protection_mode.dart';
 import 'blur_intensity.dart';
 import 'screen_recording_event.dart';
@@ -72,7 +71,8 @@ class SecureScreenPrivacy {
   }
 
   Future<bool> isAppSwitcherProtectionEnabled() {
-    return SecureScreenPrivacyPlatform.instance.isAppSwitcherProtectionEnabled();
+    return SecureScreenPrivacyPlatform.instance
+        .isAppSwitcherProtectionEnabled();
   }
 
   /// A broadcast stream of screenshot detections.
@@ -96,18 +96,16 @@ class SecureScreenPrivacy {
   /// A broadcast stream of screen recording state transitions.
   ///
   /// Subscribing starts native screen recording detection (Android:
-  /// `WindowManager.addScreenRecordingCallback` on API 35+ or
-  /// `Activity.ScreenCaptureCallback` on API 34, no-op below; iOS:
+  /// `WindowManager.addScreenRecordingCallback` on API 35+, no-op below;
+  /// iOS:
   /// `UIScreen.capturedDidChangeNotification`); cancelling the last
   /// subscription stops it. There is no separate start/stop method - the
   /// subscription *is* the toggle. The current state is emitted immediately
   /// on subscribe, so a late subscriber doesn't miss an already-in-progress
   /// recording.
   ///
-  /// See the README for platform caveats - most notably, on Android 14
-  /// (API 34) [ScreenRecordingEvent.isRecording] can only ever be reported
-  /// as `true`: there is no OS "stopped" signal on that API level alone, so
-  /// cancelling and re-subscribing is the only way to reset it.
+  /// See the README for platform caveats - most notably, Android 14 (API 34)
+  /// and below emit nothing: Android 14 has no screen-recording signal.
   Stream<ScreenRecordingEvent> get screenRecordingEvents =>
       SecureScreenPrivacyPlatform.instance.screenRecordingEvents;
 }

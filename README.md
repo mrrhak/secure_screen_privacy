@@ -170,32 +170,25 @@ await subscription.cancel();
 ```
 
 Subscribing to `screenRecordingEvents` *is* what starts native detection
-(Android: `WindowManager.addScreenRecordingCallback` on API 35+ or
-`Activity.ScreenCaptureCallback` on API 34, no-op below API 34; iOS:
+(Android: `WindowManager.addScreenRecordingCallback` on API 35+, no-op below
+API 35; iOS:
 `UIScreen.capturedDidChangeNotification`); cancelling the subscription stops
 it. There's no separate start/stop method. The current state is emitted
 immediately on subscribe, so a late subscriber doesn't miss an
 already-in-progress recording. No runtime permission is required on either
-platform (the API 34 path uses the install-time `DETECT_SCREEN_CAPTURE`
-permission the plugin already declares).
+platform (on Android 15+ it uses the install-time `DETECT_SCREEN_RECORDING`
+permission, which the plugin declares for you and the user never sees).
 
-> **Android note:** reliability depends heavily on API level. On **API 35+**,
-> `WindowManager.addScreenRecordingCallback` gives true start *and* stop
-> detection. On **API 34**, `Activity.ScreenCaptureCallback` only fires once
-> when recording starts — there is no OS-level "stopped" callback at all, so
-> `ScreenRecordingEvent.isRecording` can only ever be reported as `true`;
-> cancelling and re-subscribing to the stream is the only way to reset it.
-> (This matches the sibling `no_screenshot` plugin's behavior exactly.)
-> **Below API 34**, detection is a graceful no-op — nothing is ever emitted.
-> A further API-34-only edge case: if a config change recreates the Activity
-> while a recording is already active, the plugin won't re-signal `true`
-> after recreation, since `registerScreenCaptureCallback` has no way to query
-> the current state synchronously (unlike the API 35+ path).
+> **Android note:** recording detection needs **Android 15 (API 35)** or
+> newer, where `WindowManager.addScreenRecordingCallback` gives true start
+> *and* stop detection. **Below API 35** it's a graceful no-op and nothing is
+> ever emitted: Android 14 has no screen-recording signal. (Its
+> `Activity.ScreenCaptureCallback` fires for screenshots, not recordings;
+> see `screenshotEvents`.)
 
 > **iOS note:** uses `UIScreen.capturedDidChangeNotification`, which reports
 > a live `isCaptured` boolean rather than a directional start/stop event, so
-> a single observer correctly reports both start and stop — no API-34-style
-> "stuck true" problem here. There's no de-duplication: a notification for an
+> a single observer correctly reports both start and stop. There's no de-duplication: a notification for an
 > unrelated screen/scene (e.g. an external display in a multi-scene app) can
 > re-emit an unchanged value.
 

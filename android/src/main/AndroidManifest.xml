@@ -1,9 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   package="com.mrrhak.secure_screen_privacy">
-  <!-- Install-time ("normal") permission needed by
-       Activity.registerScreenCaptureCallback (API 34+), used for screenshot
-       detection and the API 34 screen-recording path. Not a storage/media
-       permission and never shown to the user; merged into the host app's
-       manifest automatically. -->
+  <!-- Install-time ("normal") permissions, never shown to the user and not
+       storage/media permissions; merged into the host app's manifest
+       automatically. DETECT_SCREEN_CAPTURE: Activity.registerScreenCaptureCallback
+       (API 34+), used for screenshot detection. DETECT_SCREEN_RECORDING:
+       WindowManager.addScreenRecordingCallback (API 35+), used for screen
+       recording detection; ignored on older Android versions. -->
   <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
+  <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
 </manifest>

@@ -376,9 +376,9 @@ internal class SecureScreenPrivacyPluginTest {
     // screenRecordingRegistrationPathForSdkInt / isRecordingStateVisible -
     // pure functions backing the screen recording event stream. As with
     // shouldEmitScreenshotEvent above, the actual onListen/onCancel wiring
-    // (WindowManager.addScreenRecordingCallback, Activity.
-    // registerScreenCaptureCallback) needs a real Activity/WindowManager and
-    // is not exercised here - manual/example app verification only.
+    // (WindowManager.addScreenRecordingCallback) needs a real
+    // Activity/WindowManager and is not exercised here - covered by the
+    // example app's integration test on an emulator instead.
 
     @Test
     fun screenRecordingRegistrationPathForSdkInt_belowApi34_returnsUnsupported() {
@@ -386,12 +386,12 @@ internal class SecureScreenPrivacyPluginTest {
         assertEquals(ScreenRecordingRegistrationPath.UNSUPPORTED, screenRecordingRegistrationPathForSdkInt(33))
     }
 
+    // Android 14 has no screen-recording signal: Activity.ScreenCaptureCallback
+    // fires for screenshots, so using it here reported screenshots as
+    // recordings.
     @Test
-    fun screenRecordingRegistrationPathForSdkInt_api34_returnsActivityScreenCaptureCallback() {
-        assertEquals(
-            ScreenRecordingRegistrationPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK,
-            screenRecordingRegistrationPathForSdkInt(34)
-        )
+    fun screenRecordingRegistrationPathForSdkInt_api34_returnsUnsupported() {
+        assertEquals(ScreenRecordingRegistrationPath.UNSUPPORTED, screenRecordingRegistrationPathForSdkInt(34))
     }
 
     @Test
