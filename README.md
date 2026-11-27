@@ -114,6 +114,44 @@ overlay.
 > Control Center, share sheet), so the overlay will briefly flash in those
 > cases too — this is inherent to the technique, not a bug.
 
+### Per-route protection
+
+`SecureScreenPrivacyNavigatorObserver` turns protection on and off as the
+user moves between routes. Each route gets its own `SecureRouteConfig`;
+routes with no entry use `defaultConfig` (everything off).
+
+```dart
+MaterialApp(
+  navigatorObservers: [
+    SecureScreenPrivacyNavigatorObserver(
+      policies: {
+        '/payment': const SecureRouteConfig(captureProtection: true),
+        '/profile': const SecureRouteConfig(
+          appSwitcherMode: AppSwitcherProtectionMode.blur,
+        ),
+        '/pin-dialog': const SecureRouteConfig(captureProtection: true),
+      },
+    ),
+  ],
+);
+```
+
+**Dialogs and bottom sheets** are left alone unless their route name is in
+`policies`, so menus and dropdowns never change protection. To protect one,
+give it a name and add that name to `policies`:
+
+```dart
+showDialog(
+  context: context,
+  routeSettings: const RouteSettings(name: '/pin-dialog'),
+  builder: (_) => const PinDialog(),
+);
+```
+
+When it closes, the policy of whatever is under it applies again.
+`showDialog` and `showModalBottomSheet` use the root `Navigator` by default,
+so the observer must be on that `Navigator` (as in `MaterialApp` above).
+
 ### Screenshot detection
 
 Get notified when the user takes a screenshot:

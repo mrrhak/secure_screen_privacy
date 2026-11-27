@@ -530,7 +530,7 @@ void main() {
     );
 
     test(
-      'a popup route is ignored even if deliberately given a route name',
+      'a popup route is ignored even if deliberately given a route name not in policies',
       () async {
         // A name-based check alone would be fooled by a dialog/menu route
         // that's explicitly named (e.g. for analytics) - it must still be
@@ -549,6 +549,127 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         expect(fakePlatform.calls, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'real Navigator: a named dialog with a policy is protected, and closing it restores the page policy',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/home': const SecureRouteConfig(),
+            '/pin-dialog': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final navigatorKey = GlobalKey<NavigatorState>();
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Navigator(
+              key: navigatorKey,
+              observers: [observer],
+              onGenerateRoute: (settings) => _fakeRoute('/home'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        fakePlatform.calls.clear();
+
+        final nav = navigatorKey.currentState!;
+        nav.push(_fakePopupRoute(name: '/pin-dialog'));
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls, [
+          'enableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+        fakePlatform.calls.clear();
+
+        nav.pop();
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls, [
+          'disableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
+      },
+    );
+
+    test(
+      'a named bottom sheet with an app switcher policy enables it',
+      () async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/card-sheet': const SecureRouteConfig(
+              appSwitcherMode: AppSwitcherProtectionMode.color,
+            ),
+          },
+        );
+
+        observer.didPush(
+          _fakePopupRoute(name: '/card-sheet'),
+          _fakeRoute('/home'),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, [
+          'disableCaptureProtection',
+          'enableAppSwitcherProtection(AppSwitcherProtectionMode.color, BlurIntensity.ultraLight, 4278190080, 4278190080)',
+        ]);
+      },
+    );
+
+    test(
+      'closing an unnamed popup opened on top of a protected dialog changes nothing',
+      () async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/pin-dialog': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final page = _fakeRoute('/home');
+        final dialog = _fakePopupRoute(name: '/pin-dialog');
+        final menu = _fakePopupRoute();
+
+        observer.didPush(page, null);
+        observer.didPush(dialog, page);
+        observer.didPush(menu, dialog);
+        await Future<void>.delayed(Duration.zero);
+        fakePlatform.calls.clear();
+
+        observer.didPop(menu, dialog);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, isEmpty);
+      },
+    );
+
+    test(
+      'popping a page opened from a protected dialog applies the dialog policy',
+      () async {
+        // page A (unprotected) -> protected dialog -> page B -> pop B: the
+        // dialog is showing again, so its policy applies, not A's.
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/home': const SecureRouteConfig(),
+            '/pin-dialog': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        final pageA = _fakeRoute('/home');
+        final dialog = _fakePopupRoute(name: '/pin-dialog');
+        final pageB = _fakeRoute('/details');
+
+        observer.didPush(pageA, null);
+        observer.didPush(dialog, pageA);
+        observer.didPush(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+        fakePlatform.calls.clear();
+
+        observer.didPop(pageB, dialog);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, [
+          'enableCaptureProtection',
+          'disableAppSwitcherProtection',
+        ]);
       },
     );
 
