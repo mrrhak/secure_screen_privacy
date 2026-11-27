@@ -42,11 +42,22 @@ import 'secure_screen_privacy.dart';
 /// policy of whatever is showing under it applies again. `showDialog` and
 /// `showModalBottomSheet` push onto the root Navigator by default, so this
 /// observer must be on that Navigator to see them.
+///
+/// **Nested navigators:** give each `Navigator` its own observer. They work
+/// together: protection is on when any showing navigator's current route
+/// wants it, and the app switcher mode comes from the innermost showing
+/// navigator that sets one. A nested navigator counts as showing while the
+/// page that holds it is the top page of its parent navigator (when the
+/// parent has an observer too). Several nested navigators shown side by side
+/// or kept alive as tabs all count, so a protected route on a hidden tab
+/// keeps protection on until that tab navigates.
 class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
   SecureScreenPrivacyNavigatorObserver({
     this.policies = const {},
     this.defaultConfig = const SecureRouteConfig(),
-  }) : _plugin = SecureScreenPrivacy();
+  }) : _plugin = SecureScreenPrivacy() {
+    _observers.add(WeakReference(this));
+  }
 
   final Map<String, SecureRouteConfig> policies;
   final SecureRouteConfig defaultConfig;
@@ -57,7 +68,20 @@ class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
   // underlying method-channel round trips would otherwise resolve out of
   // order (e.g. a push immediately followed by a pop, where the push's
   // enable call happens to take longer than the pop's disable call).
-  Future<void> _pending = Future<void>.value();
+  // Shared by every observer, since they all drive the same native state.
+  // When nothing is queued a new chain starts in the caller's zone, so a
+  // finished chain from another zone (e.g. a test's) is never waited on.
+  static Future<void> _pending = Future<void>.value();
+  static int _queued = 0;
+
+  // Every observer created, so nested navigators' observers can combine
+  // their policies instead of overwriting each other's (see _combined).
+  // Weak, so an observer dropped by the app doesn't stay alive here.
+  static final List<WeakReference<SecureScreenPrivacyNavigatorObserver>>
+  _observers = [];
+
+  // The policy this observer last applied, or null before its first route.
+  SecureRouteConfig? _currentConfig;
 
   // The routes this observer applies a policy for (pages, plus popups that
   // have a policy - see _isTracked) currently on the Navigator, bottom first,
@@ -145,11 +169,105 @@ class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
   void _applyPolicyForRoute(Route<dynamic>? route) {
     final name = route?.settings.name;
     final config = (name != null ? policies[name] : null) ?? defaultConfig;
+    _currentConfig = config;
     // catchError so a single failed platform call (e.g. a PlatformException)
     // doesn't permanently wedge the chain - without it, _pending stays
     // errored forever and every future navigation event's _applyConfig call
     // would silently stop running.
-    _pending = _pending.then((_) => _applyConfig(config)).catchError((_) {});
+    //
+    // This observer's own config is taken now, so quick navigations still
+    // apply in order; the other observers' part is read when the step runs
+    // (after the Navigator has finished building, so the widget tree can be
+    // walked).
+    final previous = _queued == 0 ? Future<void>.value() : _pending;
+    _queued++;
+    _pending = previous
+        .then((_) => _applyConfig(_combined(config)))
+        .catchError((_) {})
+        .whenComplete(() => _queued--);
+  }
+
+  // Merges this observer's [config] with the current policy of every other
+  // observer whose navigator is showing: capture protection if any of them
+  // wants it, and the app switcher settings of the innermost one that sets a
+  // mode. With a single observer this is just [config].
+  SecureRouteConfig _combined(SecureRouteConfig config) {
+    _observers.removeWhere((ref) => ref.target == null);
+    final parts = <(int, SecureRouteConfig)>[];
+    for (final ref in _observers) {
+      final observer = ref.target!;
+      final isSelf = identical(observer, this);
+      final observerConfig = isSelf ? config : observer._currentConfig;
+      if (observerConfig == null) continue;
+      if (observer.navigator == null) {
+        // Not on a Navigator (yet): only its own call counts.
+        if (isSelf) parts.add((0, observerConfig));
+        continue;
+      }
+      final depth = observer._showingDepth();
+      if (depth != null) parts.add((depth, observerConfig));
+    }
+    if (parts.isEmpty) return config;
+    if (parts.length == 1) return parts.single.$2;
+
+    parts.sort((a, b) => a.$1.compareTo(b.$1));
+    final capture = parts.any((part) => part.$2.captureProtection);
+    SecureRouteConfig? switcher;
+    for (final part in parts) {
+      if (part.$2.appSwitcherMode != null) switcher = part.$2;
+    }
+    return SecureRouteConfig(
+      captureProtection: capture,
+      appSwitcherMode: switcher?.appSwitcherMode,
+      blurIntensity: switcher?.blurIntensity ?? BlurIntensity.ultraLight,
+      color: switcher?.color ?? 0xFF000000,
+      imageBackgroundColor: switcher?.imageBackgroundColor ?? 0xFF000000,
+    );
+  }
+
+  // How many navigators deep this observer's navigator is (0 for the root)
+  // if it is showing, or null if it is not: its navigator is gone, or it
+  // sits inside a page that is no longer the top page of a parent navigator
+  // that has an observer (e.g. that page was popped, or a new page covers
+  // it). A parent navigator without an observer can't tell, so it counts as
+  // showing.
+  int? _showingDepth() {
+    final nav = navigator;
+    if (nav == null || !nav.mounted) return null;
+    final parentNav = nav.context.findAncestorStateOfType<NavigatorState>();
+    if (parentNav == null) return 0;
+
+    SecureScreenPrivacyNavigatorObserver? parent;
+    for (final ref in _observers) {
+      final observer = ref.target;
+      if (observer != null && identical(observer.navigator, parentNav)) {
+        parent = observer;
+        break;
+      }
+    }
+    if (parent == null) return 1;
+    final parentDepth = parent._showingDepth();
+    if (parentDepth == null) return null;
+
+    Route<dynamic>? topPage;
+    for (final route in parent._trackedRoutes.reversed) {
+      if (route is PageRoute) {
+        topPage = route;
+        break;
+      }
+    }
+    if (topPage == null) return parentDepth + 1;
+    final pageContext = (topPage as PageRoute).subtreeContext;
+    if (pageContext == null) return null;
+    var inside = false;
+    nav.context.visitAncestorElements((element) {
+      if (identical(element, pageContext)) {
+        inside = true;
+        return false;
+      }
+      return !identical(element, parentNav.context);
+    });
+    return inside ? parentDepth + 1 : null;
   }
 
   Future<void> _applyConfig(SecureRouteConfig config) async {
