@@ -21,7 +21,7 @@ Run all commands from the repo root unless noted.
 - Analyze/lint: `flutter analyze`
 - Run all Dart tests: `flutter test`
 - Run a single Dart test: `flutter test test/secure_screen_privacy_test.dart`
-- Run Android native unit tests: `cd android && ./gradlew test` (or open `android/` in Android Studio)
+- Run Android native unit tests: `cd example/android && ./gradlew :secure_screen_privacy:testDebugUnitTest` (or open `example/android` in Android Studio). The plugin's own `android/` folder has no Gradle wrapper and can't build alone: it needs the Flutter Gradle plugin, which only the example app's build brings in. On a fresh clone run `cd example && flutter build apk --config-only` once first, so `example/android/local.properties` exists. Gradle needs JDK 17 or newer; if the system `java` is older, point `JAVA_HOME` at Android Studio's bundled JDK.
 - Run the example app: `cd example && flutter run`
 - Run integration test on a device/emulator: `cd example && flutter test integration_test/plugin_integration_test.dart`
 
