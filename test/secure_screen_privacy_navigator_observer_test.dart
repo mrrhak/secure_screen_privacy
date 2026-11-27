@@ -269,6 +269,40 @@ void main() {
 
       expect(a.hashCode, equals(b.hashCode));
     });
+
+    test('toString shows every field', () {
+      const config = SecureRouteConfig(
+        captureProtection: true,
+        appSwitcherMode: AppSwitcherProtectionMode.color,
+        color: 0xFF2196F3,
+      );
+
+      expect(
+        config.toString(),
+        'SecureRouteConfig(captureProtection: true, appSwitcherMode: color, '
+        'blurIntensity: ultraLight, color: 0xFF2196F3, '
+        'imageBackgroundColor: 0xFF000000)',
+      );
+    });
+  });
+
+  group('event toString', () {
+    final time = DateTime.utc(2026, 11, 27, 10);
+
+    test('ScreenshotEvent', () {
+      expect(
+        ScreenshotEvent(time).toString(),
+        'ScreenshotEvent(timestamp: 2026-11-27 10:00:00.000Z)',
+      );
+    });
+
+    test('ScreenRecordingEvent', () {
+      expect(
+        ScreenRecordingEvent(ScreenRecordingState.unknown, time).toString(),
+        'ScreenRecordingEvent(state: unknown, '
+        'timestamp: 2026-11-27 10:00:00.000Z)',
+      );
+    });
   });
 
   group('SecureScreenPrivacyNavigatorObserver', () {

@@ -34,6 +34,15 @@ class SecureRouteConfig {
   final int imageBackgroundColor;
 
   @override
+  String toString() =>
+      'SecureRouteConfig(captureProtection: $captureProtection, '
+      'appSwitcherMode: ${appSwitcherMode?.name}, '
+      'blurIntensity: ${blurIntensity.name}, '
+      'color: 0x${color.toRadixString(16).toUpperCase()}, '
+      'imageBackgroundColor: '
+      '0x${imageBackgroundColor.toRadixString(16).toUpperCase()})';
+
+  @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SecureRouteConfig &&

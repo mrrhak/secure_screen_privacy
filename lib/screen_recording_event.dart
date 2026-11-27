@@ -33,6 +33,10 @@ class ScreenRecordingEvent {
   final DateTime timestamp;
 
   @override
+  String toString() =>
+      'ScreenRecordingEvent(state: ${state.name}, timestamp: $timestamp)';
+
+  @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ScreenRecordingEvent &&

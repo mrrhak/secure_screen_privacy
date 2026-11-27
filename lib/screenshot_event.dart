@@ -11,6 +11,9 @@ class ScreenshotEvent {
   final DateTime timestamp;
 
   @override
+  String toString() => 'ScreenshotEvent(timestamp: $timestamp)';
+
+  @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ScreenshotEvent &&
