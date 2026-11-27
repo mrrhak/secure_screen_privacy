@@ -3,6 +3,13 @@
 A Flutter plugin for screen privacy on Android and iOS: block screenshots/screen
 recording, and customize what's shown in the OS app switcher / recents preview.
 
+## Requirements
+
+- Flutter 3.38 or newer (Dart 3.10 or newer). The iOS side uses Flutter's
+  scene lifecycle API, which first shipped in Flutter 3.38.
+- Android 7.0 (API 24) or newer.
+- iOS 13 or newer.
+
 ## Usage
 
 ### Block screenshots & screen recording
