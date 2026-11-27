@@ -6,6 +6,12 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   /// screenshots and screen recording of the app's window.
   private var screenPreventField = UITextField()
   private weak var attachedWindow: UIWindow?
+  // The window showing this plugin's own Flutter view. On iPad multi-window
+  // each window runs its own engine with its own plugin instance, so
+  // capture protection must follow this window, not whichever scene happens
+  // to be active (that can be another window of the same app). A property so
+  // tests can stand in for the registrar. nil falls back to activeWindow().
+  var ownWindowProvider: () -> UIWindow? = { nil }
   private var isCaptureProtectionEnabled = false
 
   // App switcher protection state.
@@ -37,6 +43,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "secure_screen_privacy", binaryMessenger: registrar.messenger())
     let instance = SecureScreenPrivacyPlugin()
+    instance.ownWindowProvider = { [weak registrar] in registrar?.viewController?.view.window }
     registrar.addMethodCallDelegate(instance, channel: channel)
     // Register both delegate styles so re-attachment fires regardless of
     // whether the host app is UIApplicationDelegate-only or UIScene-based
@@ -231,8 +238,16 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     }
   }
 
+  // This engine's own window first; the active scene's key window only when
+  // the own window isn't known yet (no view controller, or its view isn't in
+  // a window yet). Re-run on every enable and become-active, so a fallback
+  // pick moves to the own window as soon as that window exists.
+  private func protectionTargetWindow() -> UIWindow? {
+    ownWindowProvider() ?? activeWindow()
+  }
+
   private func attachWindowIfNeeded() {
-    guard let window = activeWindow(), window !== attachedWindow else { return }
+    guard let window = protectionTargetWindow(), window !== attachedWindow else { return }
 
     // Undo previous reparenting if the active window/scene changed.
     if let oldWindow = attachedWindow, let rootLayer = screenPreventField.layer.superlayer {
@@ -552,6 +567,10 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // Test-only view of which windows currently carry an overlay.
   var isWindowAttachedToSecureField: Bool {
     attachedWindow != nil
+  }
+
+  func isProtecting(_ window: UIWindow) -> Bool {
+    window === attachedWindow && screenPreventField.isSecureTextEntry
   }
 
   func hasOverlay(on window: UIWindow) -> Bool {

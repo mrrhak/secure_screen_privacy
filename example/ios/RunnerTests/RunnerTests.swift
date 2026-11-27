@@ -27,10 +27,13 @@ class RunnerTests: XCTestCase {
   // MARK: - App switcher overlay follows the resigning scene
 
   private var testWindow: UIWindow?
+  private var otherTestWindow: UIWindow?
 
   override func tearDown() {
     testWindow?.isHidden = true
     testWindow = nil
+    otherTestWindow?.isHidden = true
+    otherTestWindow = nil
     super.tearDown()
   }
 
@@ -89,6 +92,67 @@ class RunnerTests: XCTestCase {
     plugin.sceneDidBecomeActive(scene)
 
     XCTAssertFalse(plugin.isWindowAttachedToSecureField)
+  }
+
+  // MARK: - Capture protection follows the plugin's own window (iPad multi-window)
+
+  // Two visible windows in the host scene: `active` is the scene's key
+  // window (what activeWindow() picks), `own` stands in for the window of
+  // this plugin's engine, like a second iPad window of the same app.
+  private func activeAndOwnWindows() throws -> (active: UIWindow, own: UIWindow) {
+    let scene = try hostScene()
+    let active = makeVisibleWindow(in: scene)
+    active.makeKey()
+    let own = UIWindow(windowScene: scene)
+    own.rootViewController = UIViewController()
+    own.isHidden = false
+    otherTestWindow = own
+    return (active, own)
+  }
+
+  func testEnableCaptureProtection_protectsItsOwnWindow_notTheActiveOne() throws {
+    let (active, own) = try activeAndOwnWindows()
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { own }
+
+    call(plugin, "enableCaptureProtection")
+
+    XCTAssertTrue(plugin.isProtecting(own))
+    XCTAssertFalse(plugin.isProtecting(active))
+
+    // Another scene becoming active must not move protection off it.
+    plugin.sceneDidBecomeActive(try hostScene())
+    XCTAssertTrue(plugin.isProtecting(own))
+    XCTAssertFalse(plugin.isProtecting(active))
+    call(plugin, "disableCaptureProtection")
+  }
+
+  func testEnableCaptureProtection_withoutOwnWindow_fallsBackToActiveWindow() throws {
+    let (active, own) = try activeAndOwnWindows()
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { nil }
+
+    call(plugin, "enableCaptureProtection")
+
+    XCTAssertTrue(plugin.isProtecting(active))
+    XCTAssertFalse(plugin.isProtecting(own))
+    call(plugin, "disableCaptureProtection")
+  }
+
+  func testOwnWindowAppearingLater_movesProtectionToIt() throws {
+    let (active, own) = try activeAndOwnWindows()
+    let plugin = SecureScreenPrivacyPlugin()
+    var ownWindow: UIWindow? = nil
+    plugin.ownWindowProvider = { ownWindow }
+    call(plugin, "enableCaptureProtection")
+    XCTAssertTrue(plugin.isProtecting(active))
+
+    ownWindow = own
+    plugin.sceneDidBecomeActive(try hostScene())
+
+    XCTAssertTrue(plugin.isProtecting(own))
+    XCTAssertFalse(plugin.isProtecting(active))
+    call(plugin, "disableCaptureProtection")
   }
 
   // MARK: - Image modes without the SecureScreenPrivacyImage asset
