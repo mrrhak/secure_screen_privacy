@@ -519,4 +519,44 @@ internal class SecureScreenPrivacyPluginTest {
         deduper.reset()
         assertTrue(deduper.shouldEmit(true))
     }
+
+    @Test
+    fun isTaskBackgroundColorSupported_onlyFromAndroid13() {
+        assertFalse(isTaskBackgroundColorSupported(32))
+        assertTrue(isTaskBackgroundColorSupported(33))
+        assertTrue(isTaskBackgroundColorSupported(37))
+    }
+
+    @Test
+    fun appSwitcherCardColor_colorMode_usesTheChosenColor() {
+        assertEquals(0xFF3F51B5.toInt(), appSwitcherCardColor("color", 0xFF3F51B5.toInt(), 0xFF000000.toInt(), 0xFFFFFFFF.toInt()))
+    }
+
+    @Test
+    fun appSwitcherCardColor_imageMode_usesImageBackgroundColor() {
+        assertEquals(0xFF00897B.toInt(), appSwitcherCardColor("image", 0xFF3F51B5.toInt(), 0xFF00897B.toInt(), 0xFFFFFFFF.toInt()))
+    }
+
+    @Test
+    fun appSwitcherCardColor_blurModesAndCaptureOnly_useTheThemeColor() {
+        val theme = 0xFF121212.toInt()
+        assertEquals(theme, appSwitcherCardColor("blur", 0xFF3F51B5.toInt(), 0xFF00897B.toInt(), theme))
+        assertEquals(theme, appSwitcherCardColor("imageBlur", 0xFF3F51B5.toInt(), 0xFF00897B.toInt(), theme))
+        assertEquals(theme, appSwitcherCardColor(null, 0xFF3F51B5.toInt(), 0xFF00897B.toInt(), theme))
+    }
+
+    @Test
+    fun appSwitcherCardColor_missingColor_fallsBackToTheTheme() {
+        assertEquals(0xFFFFFFFF.toInt(), appSwitcherCardColor("color", null, null, 0xFFFFFFFF.toInt()))
+    }
+
+    @Test
+    fun appSwitcherCardColor_translucentColor_isMadeOpaque() {
+        assertEquals(0xFF3F51B5.toInt(), appSwitcherCardColor("color", 0x803F51B5.toInt(), null, 0))
+    }
+
+    @Test
+    fun appSwitcherCardColor_noThemeColor_meansNoOverride() {
+        assertEquals(0, appSwitcherCardColor("blur", null, null, 0))
+    }
 }

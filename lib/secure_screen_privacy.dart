@@ -43,15 +43,16 @@ class SecureScreenPrivacy {
   /// [AppSwitcherProtectionMode.imageBlur] shows the blur in those places
   /// instead.
   ///
-  /// **Android note:** [mode] and the styling parameters above are iOS-only.
-  /// Android instead relies solely on `FLAG_SECURE` for the entire time
-  /// protection is enabled, showing a plain black/secure card in the app
-  /// switcher regardless of [mode] - no custom overlay is rendered. This is
-  /// deliberate: none of a custom overlay view, `RenderEffect` blur, or
-  /// `PixelCopy`-based capture protects the live gesture-nav "swipe up and
-  /// hold" recents peek on Android, so a custom overlay would only add
-  /// implementation cost with no additional coverage over `FLAG_SECURE`
-  /// alone.
+  /// **Android note:** Android can't draw a blur or an image there. It uses
+  /// `FLAG_SECURE` for the whole time protection is on, which shows a plain
+  /// card in the app switcher. On Android 13+ the plugin sets that card's
+  /// colour: [color] for [AppSwitcherProtectionMode.color],
+  /// [imageBackgroundColor] for [AppSwitcherProtectionMode.image], and the
+  /// app theme's current background colour (following dark/light mode) for
+  /// the blur modes. Older Android versions show the theme's background
+  /// colour read at app start. [blurIntensity] is ignored on Android. No
+  /// app-level technique hides the live "swipe up and hold" recents peek on
+  /// Android, so `FLAG_SECURE` is the most protection available there.
   Future<bool> enableAppSwitcherProtection(
     AppSwitcherProtectionMode mode, {
     BlurIntensity blurIntensity = BlurIntensity.ultraLight,

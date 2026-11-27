@@ -67,9 +67,8 @@ final isEnabled = await privacy.isAppSwitcherProtectionEnabled();
 
 Shows a blur, a static image (optionally over a blurred backdrop), or a
 solid color in the iOS App Switcher preview instead of your live UI
-whenever the app is backgrounded (Android always shows a plain
-blank card instead, see
-[Android: always a plain blank card](#android-always-a-plain-blank-card)).
+whenever the app is backgrounded (Android shows a plain card instead, see
+[Android: a plain card in a colour you choose](#android-a-plain-card-in-a-colour-you-choose)).
 
 `AppSwitcherProtectionMode.image` and `AppSwitcherProtectionMode.imageBlur`
 require the host app to bundle an image set named `SecureScreenPrivacyImage`
@@ -99,23 +98,37 @@ overlay.
 > Control Center, share sheet), so the overlay will briefly flash in those
 > cases too — this is inherent to the technique, not a bug.
 
-#### Android: always a plain blank card
+#### Android: a plain card in a colour you choose
 
-On Android the App Switcher shows a **plain blank card** while protection is
-on: usually black, sometimes filled with your app's background color (white
-with the default light theme). Your app's content is hidden either way.
-`mode`, `blurIntensity`, `color` and `imageBackgroundColor` only change the
-look **on iOS**. Android accepts them, so the same Dart code runs on both
-platforms, but ignores them.
+Android can't draw a blur or an image in the App Switcher. While protection
+is on, it shows a **plain card** instead, with your app's content hidden.
 
-<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain blank card for the protected app">
+On **Android 13 (API 33) and newer** the plugin sets that card's colour:
 
-This is deliberate, not a missing feature or a bug:
+| `mode` | Card colour on Android |
+| --- | --- |
+| `color` | `color` |
+| `image` | `imageBackgroundColor` |
+| `blur`, `imageBlur` | your app theme's background colour (`android:colorBackground`), following dark/light mode straight away |
+| capture protection only | your app theme's background colour |
+
+`blurIntensity` is ignored on Android. On **Android 12 and older** the card
+uses the theme's background colour as it was when the app started, so after a
+dark/light switch it keeps the old colour until the app restarts.
+
+<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain teal card for the protected app in color mode">
+
+The card colour is set with `Activity.setTaskDescription`. The plugin keeps
+the label and colours Flutter sets there (from `MaterialApp.title` and
+`color`), but if your app calls `setTaskDescription` with its own icon, that
+icon isn't kept while protection is on.
+
+Why not a real blur or image cover on Android?
 
 - Protection on Android uses `FLAG_SECURE`, and Android leaves the content
-  out of the App Switcher picture of a `FLAG_SECURE` window. A custom color
-  or image would only show if `FLAG_SECURE` were off, which would also let
-  screenshots through.
+  out of the App Switcher picture of a `FLAG_SECURE` window, so anything an
+  app draws there is left out too. A cover would only show with
+  `FLAG_SECURE` off, which would also let screenshots through.
 - A blur never makes it into the App Switcher picture: Android takes the
   picture before a blur can finish drawing.
 - No app-level technique (a custom cover, a `RenderEffect` blur,
@@ -124,10 +137,6 @@ This is deliberate, not a missing feature or a bug:
   "swipe up and hold" gesture, shows the real screen for that moment, because
   Android draws the app's actual window there. Once the app is in the
   background, its card is blank. This is a known Android limit.
-
-So `FLAG_SECURE` alone already gives the most protection Android allows, and
-a blank card is what users see from banking and password apps too. `mode`
-is still required, and still matters, on iOS.
 
 ### Per-route protection
 

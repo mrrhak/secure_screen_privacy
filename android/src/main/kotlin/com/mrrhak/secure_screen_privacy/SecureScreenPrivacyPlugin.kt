@@ -1,15 +1,21 @@
 package com.mrrhak.secure_screen_privacy
 
 import android.app.Activity
+import android.app.ActivityManager
+import android.app.Application
+import android.content.ComponentCallbacks
 import android.content.ContentResolver
 import android.content.Context
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.TypedValue
 import android.view.WindowManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -41,6 +47,22 @@ class SecureScreenPrivacyPlugin :
     // the whole implementation here, unlike iOS which keeps a full set of
     // custom overlay modes.
     private var isAppSwitcherProtectionEnabled = false
+    private var appSwitcherMode: String? = null
+    private var appSwitcherColor: Int? = null
+    private var appSwitcherImageBackgroundColor: Int? = null
+
+    // App Switcher card colour (Android 13+ only). While FLAG_SECURE is on,
+    // Android shows a blank card filled with the task's background colour,
+    // which by default is the theme's android:colorBackground read once at
+    // Activity start - so it ignores AppSwitcherProtectionMode.color and
+    // keeps the old colour after a dark/light switch until the app restarts.
+    // The plugin sets that colour itself via setTaskDescription: the chosen
+    // colour for color/image mode, otherwise the theme's current
+    // colorBackground, re-applied on every pause and configuration change.
+    // See appSwitcherCardColor below.
+    private var hasSetTaskBackgroundColor = false
+    private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
+    private var configurationCallbacks: ComponentCallbacks? = null
 
     // Screenshot event stream. Two detection paths, picked by
     // screenshotDetectionPathForSdkInt: on API 34+ the OS's own
@@ -131,7 +153,13 @@ class SecureScreenPrivacyPlugin :
             "isCaptureProtectionEnabled" -> result.success(isCaptureProtectionEnabled)
             "enableAppSwitcherProtection" -> {
                 val mode = call.argument<String>("mode")
-                result.success(setAppSwitcherProtection(mode))
+                result.success(
+                    setAppSwitcherProtection(
+                        mode,
+                        (call.argument<Any>("color") as? Number)?.toInt(),
+                        (call.argument<Any>("imageBackgroundColor") as? Number)?.toInt(),
+                    )
+                )
             }
             "disableAppSwitcherProtection" -> result.success(clearAppSwitcherProtection())
             "isAppSwitcherProtectionEnabled" -> result.success(isAppSwitcherProtectionEnabled)
@@ -389,6 +417,7 @@ class SecureScreenPrivacyPlugin :
             // though isAppSwitcherProtectionEnabled would still report true.
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
+        updateTaskBackgroundColor()
         return true
     }
 
@@ -413,26 +442,128 @@ class SecureScreenPrivacyPlugin :
     // mechanism has no equivalent live-compositor bypass) and keeps its full
     // set of custom overlay AppSwitcherProtectionMode renderings.
     //
-    // mode/blurIntensity/color/imageBackgroundColor are still accepted on the
-    // method channel for cross-platform API-contract parity with iOS, but
-    // Android only reads mode (to preserve the existing null-check contract)
-    // and otherwise ignores all of them.
+    // There is no blur or image on Android. On Android 13+ the blank card's
+    // colour follows the mode instead (see appSwitcherCardColor): color mode
+    // uses `color`, image mode uses `imageBackgroundColor`, and blur/imageBlur
+    // use the theme's current background colour. blurIntensity is ignored.
 
     // Like setCaptureProtection, recorded even with no Activity attached yet
     // and applied by reapplyFlagSecureIfNeeded() on attach.
-    private fun setAppSwitcherProtection(mode: String?): Boolean {
+    private fun setAppSwitcherProtection(
+        mode: String?,
+        color: Int?,
+        imageBackgroundColor: Int?,
+    ): Boolean {
         if (mode == null) return false
         isAppSwitcherProtectionEnabled = true
+        appSwitcherMode = mode
+        appSwitcherColor = color
+        appSwitcherImageBackgroundColor = imageBackgroundColor
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        updateTaskBackgroundColor()
         return true
     }
 
     private fun clearAppSwitcherProtection(): Boolean {
         isAppSwitcherProtectionEnabled = false
+        appSwitcherMode = null
+        appSwitcherColor = null
+        appSwitcherImageBackgroundColor = null
         if (!isCaptureProtectionEnabled) {
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
+        updateTaskBackgroundColor()
         return true
+    }
+
+    // Sets (or, once protection is off, resets) the background colour of the
+    // App Switcher card. Keeps the task's current label and colours, which
+    // Flutter itself sets from MaterialApp.title/color, and only swaps the
+    // background colour. Flutter resets the whole description whenever the
+    // Title widget rebuilds, which is why this also runs on every pause.
+    private fun updateTaskBackgroundColor() {
+        if (!isTaskBackgroundColorSupported(Build.VERSION.SDK_INT)) return
+        val act = activity ?: return
+        val isProtected = isCaptureProtectionEnabled || isAppSwitcherProtectionEnabled
+        if (!isProtected && !hasSetTaskBackgroundColor) return
+        val background = if (isProtected) {
+            appSwitcherCardColor(
+                if (isAppSwitcherProtectionEnabled) appSwitcherMode else null,
+                appSwitcherColor,
+                appSwitcherImageBackgroundColor,
+                themeBackgroundColor(act),
+            )
+        } else {
+            0 // 0 = no override: back to the theme's own colour
+        }
+        try {
+            val current = currentTaskDescription(act)
+            val builder = ActivityManager.TaskDescription.Builder()
+            if (current != null) {
+                current.label?.let { builder.setLabel(it) }
+                builder.setPrimaryColor(current.primaryColor)
+                builder.setStatusBarColor(current.statusBarColor)
+                builder.setNavigationBarColor(current.navigationBarColor)
+            }
+            builder.setBackgroundColor(background)
+            act.setTaskDescription(builder.build())
+            hasSetTaskBackgroundColor = isProtected
+        } catch (e: RuntimeException) {
+            // Never let a cosmetic colour break protection itself.
+        }
+    }
+
+    private fun currentTaskDescription(act: Activity): ActivityManager.TaskDescription? =
+        try {
+            act.getSystemService(ActivityManager::class.java)
+                ?.appTasks
+                ?.firstOrNull { it.taskInfo.taskId == act.taskId }
+                ?.taskInfo
+                ?.taskDescription
+        } catch (e: RuntimeException) {
+            null
+        }
+
+    // The theme's android:colorBackground for the current dark/light mode,
+    // or 0 (no override) if it isn't a plain colour.
+    private fun themeBackgroundColor(act: Activity): Int {
+        val value = TypedValue()
+        if (!act.theme.resolveAttribute(android.R.attr.colorBackground, value, true)) return 0
+        return if (value.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT) {
+            value.data
+        } else {
+            0
+        }
+    }
+
+    private fun registerTaskColorCallbacks(act: Activity) {
+        if (!isTaskBackgroundColorSupported(Build.VERSION.SDK_INT)) return
+        unregisterTaskColorCallbacks(act)
+        val lifecycle = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityPaused(a: Activity) = updateTaskBackgroundColor()
+            override fun onActivityCreated(a: Activity, b: Bundle?) {}
+            override fun onActivityStarted(a: Activity) {}
+            override fun onActivityResumed(a: Activity) {}
+            override fun onActivityStopped(a: Activity) {}
+            override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
+            override fun onActivityDestroyed(a: Activity) {}
+        }
+        act.registerActivityLifecycleCallbacks(lifecycle)
+        lifecycleCallbacks = lifecycle
+        val config = object : ComponentCallbacks {
+            override fun onConfigurationChanged(newConfig: Configuration) = updateTaskBackgroundColor()
+            @Deprecated("Deprecated in Java")
+            override fun onLowMemory() {}
+        }
+        act.registerComponentCallbacks(config)
+        configurationCallbacks = config
+    }
+
+    private fun unregisterTaskColorCallbacks(act: Activity?) {
+        lifecycleCallbacks?.let { act?.unregisterActivityLifecycleCallbacks(it) }
+        configurationCallbacks?.let { act?.unregisterComponentCallbacks(it) }
+        lifecycleCallbacks = null
+        configurationCallbacks = null
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -458,6 +589,8 @@ class SecureScreenPrivacyPlugin :
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         reapplyFlagSecureIfNeeded()
+        registerTaskColorCallbacks(binding.activity)
+        updateTaskBackgroundColor()
         registerScreenRecordingCallbacksIfNeeded()
         registerScreenshotCaptureCallbackIfNeeded()
     }
@@ -465,12 +598,15 @@ class SecureScreenPrivacyPlugin :
     override fun onDetachedFromActivityForConfigChanges() {
         unregisterScreenshotCaptureCallback() // must run before activity = null below
         unregisterScreenRecordingCallbacks() // must run before activity = null below
+        unregisterTaskColorCallbacks(activity)
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
         reapplyFlagSecureIfNeeded()
+        registerTaskColorCallbacks(binding.activity)
+        updateTaskBackgroundColor()
         registerScreenRecordingCallbacksIfNeeded()
         registerScreenshotCaptureCallbackIfNeeded()
     }
@@ -478,6 +614,7 @@ class SecureScreenPrivacyPlugin :
     override fun onDetachedFromActivity() {
         unregisterScreenshotCaptureCallback() // must run before activity = null below
         unregisterScreenRecordingCallbacks() // must run before activity = null below
+        unregisterTaskColorCallbacks(activity)
         activity = null
     }
 
@@ -617,4 +754,28 @@ internal class ScreenRecordingStateDeduper {
         hasEmitted = false
         lastState = null
     }
+}
+
+// Android 13 (API 33) added TaskDescription.Builder.setBackgroundColor, the
+// only public way to set the App Switcher card colour at runtime.
+internal fun isTaskBackgroundColorSupported(sdkInt: Int): Boolean = sdkInt >= 33
+
+// The colour of the blank App Switcher card while protection is on. `mode`
+// is the AppSwitcherProtectionMode name, or null when only capture protection
+// is on. color mode uses `color`, image mode `imageBackgroundColor`; every
+// other case uses the theme's current background colour. Colours are made
+// fully opaque, since TaskDescription rejects a translucent background.
+// 0 means "no override" (Android falls back to the theme's own colour).
+internal fun appSwitcherCardColor(
+    mode: String?,
+    color: Int?,
+    imageBackgroundColor: Int?,
+    themeColor: Int,
+): Int {
+    val chosen = when (mode) {
+        "color" -> color
+        "image" -> imageBackgroundColor
+        else -> null
+    } ?: themeColor
+    return if (chosen == 0) 0 else chosen or 0xFF000000.toInt()
 }

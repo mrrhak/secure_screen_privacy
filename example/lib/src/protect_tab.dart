@@ -260,8 +260,9 @@ class ProtectTabState extends State<ProtectTab> {
               ),
               const NoteBox(
                 'iOS shows the cover you pick. The image comes from the '
-                '"SecureScreenPrivacyImage" asset in the app. Android always '
-                'shows a plain blank card instead, for every mode.',
+                '"SecureScreenPrivacyImage" asset in the app. Android shows a '
+                'plain card: on Android 13+ in the colour you pick (Color and '
+                'Image), otherwise in the app\'s background colour.',
               ),
               const SizedBox(height: 12),
               Builder(
