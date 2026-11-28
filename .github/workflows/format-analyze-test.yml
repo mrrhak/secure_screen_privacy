@@ -128,7 +128,8 @@ jobs:
           cache: true
 
       # pigeon (a dev-only tool for regenerating the platform code) needs a
-      # newer Dart than this Flutter has; the tests don't use it.
+      # newer Dart than this Flutter has (30.0.3+ needs Flutter 3.44); the tests
+      # don't use it.
       - name: Install Dependencies
         run: |
           sed -i "/^  pigeon:/d" pubspec.yaml
