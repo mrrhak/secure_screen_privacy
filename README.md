@@ -79,6 +79,43 @@
 
 ---
 
+## 📸 See it in the App Switcher
+
+<p align="center">
+  Four ways to cover your app when the user swipes to the App Switcher (iOS).
+</p>
+
+<table align="center">
+  <tr>
+    <td align="center" width="25%">
+      <img src="https://raw.githubusercontent.com/mrrhak/secure_screen_privacy/master/doc/images/ios_app_switcher_blur.png" width="180" alt="iOS App Switcher showing a blur of the app's screen">
+    </td>
+    <td align="center" width="25%">
+      <img src="https://raw.githubusercontent.com/mrrhak/secure_screen_privacy/master/doc/images/ios_app_switcher_color.png" width="180" alt="iOS App Switcher showing a solid dark blue card">
+    </td>
+    <td align="center" width="25%">
+      <img src="https://raw.githubusercontent.com/mrrhak/secure_screen_privacy/master/doc/images/ios_app_switcher_image.png" width="180" alt="iOS App Switcher showing the app logo on a dark blue background">
+    </td>
+    <td align="center" width="25%">
+      <img src="https://raw.githubusercontent.com/mrrhak/secure_screen_privacy/master/doc/images/ios_app_switcher_image_blur.png" width="180" alt="iOS App Switcher showing the app logo over a blur of the screen">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><b>Blur</b><br><code>blur</code></td>
+    <td align="center"><b>Color</b><br><code>color</code></td>
+    <td align="center"><b>Image</b><br><code>image</code></td>
+    <td align="center"><b>Image + blur</b><br><code>imageBlur</code></td>
+  </tr>
+</table>
+
+<p align="center">
+  <sub>Pick one with <code>enableAppSwitcherProtection(AppSwitcherProtectionMode.…)</code>.
+  On Android the App Switcher shows a plain card in your color. See
+  <a href="#hide-the-app-in-the-app-switcher">Hide the app in the App Switcher</a>.</sub>
+</p>
+
+---
+
 ## ✨ Why secure_screen_privacy?
 
 - **Everything in one place.** Screenshot blocking, App Switcher privacy,
