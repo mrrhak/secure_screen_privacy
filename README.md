@@ -184,6 +184,16 @@ navigator stops counting once the page holding it is covered by another
 page or popped. Tabs kept alive side by side all count, so a protected route
 on a hidden tab keeps protection on until that tab navigates.
 
+**go_router and auto_route** work too. Pages added below the one showing
+(a deep link that opens several pages, auto_route's `insert`) don't change
+protection until they're on top.
+
+- go_router: pass the observer in `GoRouter(observers: [...])`. A page's
+  name is the `GoRoute`'s `name`, or its `path` when it has none.
+- auto_route: pass it in
+  `router.config(navigatorObservers: () => [...])`. A page's name is the
+  route's name, for example `PaymentRoute`.
+
 ### Screenshot detection
 
 Get notified when the user takes a screenshot:
