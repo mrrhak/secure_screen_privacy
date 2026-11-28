@@ -137,9 +137,16 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          # The default RAM ran out right after boot ("fork failed: Out of
+          # memory"), so Flutter couldn't read the device's API level.
+          ram-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: example
-          script: flutter test integration_test -d emulator-5554
+          # Wait until the device answers before Flutter looks for it.
+          script: |
+            for i in $(seq 1 60); do [ -n "$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')" ] && break; sleep 2; done
+            flutter test integration_test -d emulator-5554
 
   # Runs example/integration_test on an iPhone simulator, so the Swift
   # plugin code runs for real.
