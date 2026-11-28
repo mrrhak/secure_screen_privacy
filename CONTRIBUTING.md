@@ -1,0 +1,124 @@
+# Contributing to secure_screen_privacy
+
+Thank you for your interest in contributing!
+
+You can help by reporting bugs, suggesting improvements, joining issue
+discussions and sending pull requests.
+
+## Code structure
+
+This is a Flutter plugin: a Dart API on top, with Android (Kotlin) and iOS
+(Swift) code underneath, talking over platform channels.
+
+```
+lib/
+├── secure_screen_privacy.dart                      public API: SecureScreenPrivacy
+├── secure_screen_privacy_platform_interface.dart   the contract each platform implements
+├── secure_screen_privacy_method_channel.dart       default implementation over the channels
+├── app_switcher_protection_mode.dart               blur, color, image, imageBlur
+├── blur_intensity.dart                             ultraLight, light, medium, heavy
+├── screenshot_event.dart                           ScreenshotEvent
+├── screen_recording_event.dart                     ScreenRecordingEvent, ScreenRecordingState
+├── secure_route_config.dart                        per-route settings for the observer
+└── secure_screen_privacy_navigator_observer.dart   protects screens by route (pure Dart)
+android/src/main/kotlin/.../SecureScreenPrivacyPlugin.kt
+ios/secure_screen_privacy/Sources/secure_screen_privacy/SecureScreenPrivacyPlugin.swift
+example/                                            demo app, also hosts the iOS tests
+```
+
+The channels:
+
+* `MethodChannel('secure_screen_privacy')` for every method call.
+* `EventChannel('secure_screen_privacy/screenshot_events')` for screenshots.
+* `EventChannel('secure_screen_privacy/screen_recording_events')` for
+  recording start and stop.
+
+Where to make a change:
+
+* A new method: add it to the platform interface, the method channel class and
+  the public API, then handle it in the Kotlin and Swift plugins. The method
+  name must be the same string in all of them.
+* A new event stream: give it its own `EventChannel` and its own stream
+  handler on each platform. One handler can't tell two channels apart.
+* Route-based protection: `lib/secure_screen_privacy_navigator_observer.dart`.
+  It only calls the public API, so it never touches native code.
+* Screenshot detection must never ask for a storage, photos or media
+  permission.
+
+Tests:
+
+* Dart: `test/` (public API, method channel, navigator observer).
+* Android: `android/src/test/`, run through the example app's Gradle build.
+* iOS: `example/ios/RunnerTests/`, run with Xcode against a simulator.
+
+## Reporting a bug
+
+1. **Is it a bug?** Check first that you're using the API as the README and API
+   documentation describe. Many limits are platform rules, listed in the
+   README's Notes.
+2. **Is it a new bug?** Search the GitHub issues first. If it has already been
+   reported, add what you know to that issue instead.
+3. **How can we reproduce it?** Fork this repository and make the smallest
+   change to the example app that shows the bug. Skip this if you fix the bug
+   yourself, or if the example already shows it.
+4. **Submit a report!** Open a new issue with the platform and OS version, the
+   device or simulator, your Flutter version, the steps to reproduce, and
+   what you expected to happen.
+
+Things to AVOID:
+
+* Do not share your whole app as the reproduction. It makes it hard to see
+  what's happening.
+* Do not use a bug report to ask a question. Use StackOverflow instead.
+* Try to avoid posting a duplicate bug.
+
+## Suggesting an improvement
+
+Open a new issue that describes the improvement and why it helps. Search the
+existing issues first to avoid a duplicate.
+
+## Making a pull request
+
+Pull requests are used to contribute bug fixes, new features or documentation
+improvements. Before working on a pull request, an issue should exist that
+describes the feature or bug.
+
+To create a pull request:
+
+1. Fork this repository.
+2. Create a branch for your changes from `master`.
+3. Make your changes, and update the README if you changed how the API
+   behaves.
+4. Add a line about your change under the right heading of the next version
+   in `CHANGELOG.md`.
+5. Run the checks below.
+6. Create the pull request via [GitHub's instructions](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork),
+   with a title like `fix: ...` or `feat: ...` (CI checks it).
+7. [Link](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)
+   that pull request with the original issue.
+
+The checks CI runs, so run them first:
+
+```sh
+dart format .
+dart analyze --fatal-infos --fatal-warnings .
+flutter test
+cd example && flutter test && cd ..
+cd example && flutter build apk --config-only && cd android && ./gradlew :secure_screen_privacy:testDebugUnitTest && cd ../..
+cd example && flutter build ios --simulator --debug && cd ..
+```
+
+If you changed iOS code, also run the iOS tests in Xcode
+(`example/ios/Runner.xcworkspace`, scheme Runner, Test).
+
+Best practices for a pull request:
+
+* Follow the style of the existing code. Dart is formatted with `dart format`.
+* Change Dart, Kotlin and Swift together when a feature touches both
+  platforms, and say in the pull request which platforms and OS versions you
+  tested on.
+* Keep the diff to the lines needed for the change: no unrelated formatting
+  or IDE files.
+* Don't mix unrelated changes in one pull request. Send them separately so
+  each can be reviewed on its own.
+* Use meaningful commit messages.

@@ -1,0 +1,27 @@
+# This file replaces the root .gitignore for pub, so it repeats what must
+# stay out of the published package.
+.DS_Store
+.dart_tool/
+.flutter-plugins-dependencies
+.build/
+.swiftpm/
+.idea/
+.vscode/
+*.iml
+*.log
+/build/
+/coverage/
+doc/
+pubspec.lock
+
+# Repo tooling, not needed to use the package.
+CLAUDE.md
+cspell.json
+
+# Native unit tests run in this repo's CI only.
+/android/src/test/
+
+# The example's platform runners aren't needed to read the example, and
+# README images load from GitHub.
+/example/android/
+/example/ios/

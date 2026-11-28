@@ -1,0 +1,4 @@
+test/** linguist-vendored
+android/src/test/** linguist-vendored
+coverage/** linguist-generated
+example/** linguist-documentation
