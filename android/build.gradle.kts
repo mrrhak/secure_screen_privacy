@@ -1,5 +1,5 @@
 group = "com.mrrhak.secure_screen_privacy"
-version = "1.0-SNAPSHOT"
+version = "1.0.0"
 
 buildscript {
     val kotlinVersion = "2.4.20"
