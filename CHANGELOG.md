@@ -1,29 +1,59 @@
+# Changelog
+
 ## 0.0.1
 
-* Initial release.
-* Fix the package's version limits: it said Flutter 3.3 or newer, but the iOS code needs Flutter 3.38 (scene lifecycle API), so older Flutter versions failed to build on iOS. It now needs Flutter 3.38+ and Dart 3.10+ (was Dart 3.12.2+, which shut out several Flutter releases the plugin works on).
-* Fix iOS capture protection on iPad multi-window: each window runs its own Flutter engine and plugin instance, but every instance protected whichever window was active, so one window could be left open to screenshots and recording. Each instance now protects its own engine's window (`registrar.viewController?.view.window`), falling back to the active window only until that window exists.
-* Add `ScreenRecordingState` (`recording`/`notRecording`/`unknown`) and `ScreenRecordingEvent.state`. Android 14 (API 34) and below, which can't detect screen recording, now send one `unknown` event on subscribe instead of nothing, so apps can tell "can't detect" from "not recording". `isRecording` is now a getter (true only for `recording`); the constructor takes a `ScreenRecordingState`.
-* Fix iOS `disableCaptureProtection` moving the app's window under the secure text field even though protection was off. With `SecureScreenPrivacyNavigatorObserver` this happened at startup in every app, since the first route disables protection. Only enabling does it now.
-* iOS privacy manifest: declare the system boot time API (`ProcessInfo.systemUptime`, reason `35F9.1`, used to merge duplicate screenshot notifications) and bundle the manifest for both Swift Package Manager and CocoaPods.
-* Fix iOS `image`/`imageBlur` app switcher modes turning protection off entirely when the host app has no `SecureScreenPrivacyImage` asset (the call returned `false`, which `SecureScreenPrivacyNavigatorObserver` ignores). They now fall back to a plain `imageBackgroundColor` cover / plain blur and log a warning.
-* Add `enableCaptureProtection`/`disableCaptureProtection`/`isCaptureProtectionEnabled` to block screenshots and screen recording.
-* Add `enableAppSwitcherProtection`/`disableAppSwitcherProtection`/`isAppSwitcherProtectionEnabled` with `AppSwitcherProtectionMode` (blur/image/color) to customize the OS app switcher/recents preview.
-* Add `SecureScreenPrivacyNavigatorObserver` + `SecureRouteConfig` to apply capture protection and/or app switcher protection per route.
-* `SecureScreenPrivacyNavigatorObserver` can now protect dialogs and bottom sheets: a popup route whose name has an entry in `policies` gets that policy, and closing it applies the policy of whatever is under it again. Unnamed or unlisted popups (menus, dropdowns) are still ignored.
-* Add `screenshotEvents` stream (with `ScreenshotEvent`) to detect screenshots: subscribing starts native detection, cancelling stops it.
-* `screenRecordingEvents` now sends a state only when it changes: Android sent the current state again after every Activity recreation (rotation, dark mode), and iOS could repeat it when `capturedDidChangeNotification` posted without a change. A new subscription still gets the current state first.
-* Add `screenRecordingEvents` stream (with `ScreenRecordingEvent`) to detect screen recording/mirroring start and stop: subscribing starts native detection, cancelling stops it.
-* Simplify Android app switcher protection to a `FLAG_SECURE`-only toggle (kept on for the entire enabled lifetime, regardless of `AppSwitcherProtectionMode`), since no overlay/blur rendering technique protects Android's live gesture-nav "swipe up and hold" recents peek. iOS is unchanged and keeps all four `AppSwitcherProtectionMode` renderings.
-* Fix Android `disableCaptureProtection` clearing `FLAG_SECURE` even while app switcher protection was still enabled, silently turning off app switcher protection despite `isAppSwitcherProtectionEnabled()` still reporting `true`.
-* Fix `SecureScreenPrivacyNavigatorObserver` permanently skipping all future route policy changes after a single platform call failure, by recovering the internal serialization chain instead of leaving it errored forever.
-* Fix `SecureScreenPrivacyNavigatorObserver` turning protection off after `pushAndRemoveUntil` to a protected page, or after `removeRoute` took out a page under a protected one: it applied the route under the removed one instead of the one on top. Removing or replacing a route below the top now changes nothing, and a protected popup replaced by an ignored one gives the page under it its own policy back.
-* Fix iOS `screenRecordingEvents` reading the recording state from the wrong screen: it used the active window, which on iPad multi-window can be another window of the app, and while the app was inactive it fell back to any scene, possibly an external display. It now checks the screen of the plugin's own window first, like capture protection.
-* Fix `SecureScreenPrivacyNavigatorObserver` applying the policy of a page added below the top one (a page inserted into `Navigator.pages`, auto_route's `insert`), which replaced the protection of the page actually showing. It's now only recorded, and its policy applies once it's on top.
-* Fix nested navigators' `SecureScreenPrivacyNavigatorObserver`s overwriting each other: e.g. going back to a page that holds a nested navigator on a protected route turned protection off. Observers now combine their policies (protection on if any showing navigator wants it; app switcher mode from the innermost one), and a nested navigator stops counting once its page is covered or popped.
-* Fix iOS `enableAppSwitcherProtection` `blur`/`imageBlur` modes disabling capture protection's secure window before the (asynchronously computed) overlay actually attached, leaving live content briefly exposed to the OS app switcher snapshot; the secure field is now disabled only once the overlay is confirmed attached, and left enabled (falling back to the default blank redaction) if the overlay never attaches at all.
-* Fix iOS `disableAppSwitcherProtection` not restoring capture protection's secure window when called while the app switcher overlay was already showing, which could leave capture protection inactive until the next foreground transition despite `isCaptureProtectionEnabled()` still reporting `true`.
-* `ScreenshotEvent`, `ScreenRecordingEvent` and `SecureRouteConfig` now print their values (`toString`). Android 13 and below now report a screenshot's detection time, like Android 14+ and iOS, instead of the image's whole-second `DATE_ADDED` (up to a second early).
-* **Breaking:** replace `enableAppSwitcherProtection`'s `blurRadius: double` parameter (and `SecureRouteConfig.blurRadius`) with `blurIntensity: BlurIntensity` (`ultraLight`/`light`/`medium`/`heavy`, default `ultraLight`) - a platform-neutral enum in place of an iOS-specific radius value, mapped on iOS to `UIBlurEffect.Style`; Android continues to ignore this parameter.
-* Fix `SecureScreenPrivacyNavigatorObserver` treating popup routes pushed by widgets like `DropdownButton`/`PopupMenuButton`/`showDialog` (which share the same `Navigator` the observer is attached to) as real page navigations. Opening or closing one of these on an unmapped/default-policy route (e.g. a typical home screen) reapplied `defaultConfig` and disabled whatever protection had been manually enabled there - racing against and often clobbering an app's own `enableAppSwitcherProtection`/`enableCaptureProtection` call made in response to the same interaction (e.g. picking a new `AppSwitcherProtectionMode` from a dropdown). `didPush`/`didPop`/`didReplace`/`didRemove` now ignore any route that isn't a `PageRoute` - the base class all real navigable screens extend (`MaterialPageRoute`/`CupertinoPageRoute`/`PageRouteBuilder`), as opposed to `PopupRoute`, which `DialogRoute`/`ModalBottomSheetRoute`/dropdown and menu routes extend instead. This is a route-type check rather than a `settings.name == null` check specifically so a deliberately-named dialog/menu route (e.g. named for analytics) is still correctly ignored.
-* Android 13+ (API 33+): the App Switcher card now uses the colour you pick (`color` for `color` mode, `imageBackgroundColor` for `image` mode), and in the blur modes or with capture protection alone it follows the app theme's background colour, updating straight away after a dark/light switch (it used to keep the colour from app start until a restart).
+First release.
+
+### Screenshot and recording blocking
+
+- `enableCaptureProtection`, `disableCaptureProtection` and
+  `isCaptureProtectionEnabled` block screenshots and screen recording of the
+  app.
+- Protection asked for before the screen is ready (at app start, or with no
+  Android Activity yet) is kept and applied as soon as it is.
+- On iPad multi-window each window protects itself.
+
+### App Switcher privacy
+
+- `enableAppSwitcherProtection`, `disableAppSwitcherProtection` and
+  `isAppSwitcherProtectionEnabled` hide the app in the App Switcher.
+- `AppSwitcherProtectionMode`: `blur`, `color`, `image` and `imageBlur`, with
+  `BlurIntensity` (`ultraLight`, `light`, `medium`, `heavy`), `color` and
+  `imageBackgroundColor`.
+- iOS covers every screen showing, including share sheets, pickers, alerts
+  and modals, on the window that is leaving.
+- iOS image modes without the `SecureScreenPrivacyImage` asset still cover
+  the screen, with the background color or the blur.
+- Android shows a plain card. On Android 13 and newer its color follows the
+  mode and changes right away with dark and light mode.
+
+### Per-route protection
+
+- `SecureScreenPrivacyNavigatorObserver` and `SecureRouteConfig` turn
+  protection on and off per route, with a `defaultConfig` for the rest.
+- Dialogs and bottom sheets can be protected by route name. Menus and
+  dropdowns never change protection.
+- Works with nested navigators, `pushAndRemoveUntil`, `removeRoute`,
+  `replace`, go_router and auto_route. Pages added below the one showing
+  don't change protection until they're on top.
+
+### Screenshot and recording events
+
+- `screenshotEvents` reports each screenshot with its time. Listening starts
+  detection and cancelling stops it.
+- `screenRecordingEvents` reports when recording or mirroring starts and
+  stops, with `ScreenRecordingState` (`recording`, `notRecording`,
+  `unknown`). It sends the current state first, then only changes.
+- Android 14 and newer use the system screenshot callback, so each
+  screenshot is reported once. On iOS only screenshots taken while your app
+  is on screen are reported. Android 15 and newer detect recording. Older
+  versions send `unknown`.
+- No storage, photos or media permission is ever requested. The
+  `DETECT_SCREEN_CAPTURE` and `DETECT_SCREEN_RECORDING` permissions are
+  granted at install time and never shown to the user.
+
+### Platforms
+
+- Flutter 3.38 or newer, Android 7.0 (API 24) or newer, iOS 13 or newer.
+- iOS supports Swift Package Manager and CocoaPods, and includes a privacy
+  manifest.

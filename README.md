@@ -1,168 +1,197 @@
-# secure_screen_privacy
+<div align="center">
+  <h1 align="center" style="font-size: 50px;">🔒 Secure Screen Privacy 🔒</h1>
+  <p align="center">
+  Keep sensitive screens private on Android and iOS. Block screenshots and screen recording, hide your app in the App Switcher, and know when the screen is captured.
+ </p>
+  <p align="center">
+  <b>One plugin. Every privacy screen. No permissions to ask for.</b>
+ </p>
+</div>
 
-A Flutter plugin for screen privacy on Android and iOS: block screenshots/screen
-recording, and customize what's shown in the OS app switcher / recents preview.
+<div align="center">
+   <!--  Donations -->
+  <a href="https://ko-fi.com/mrrhak">
+    <img width="300" src="https://user-images.githubusercontent.com/26390946/161375567-9e14cd0e-1675-4896-a576-a449b0bcd293.png">
+  </a>
+  <div align="center">
+    <a href="https://www.buymeacoffee.com/mrrhak">
+      <img width="150" alt="buymeacoffee" src="https://user-images.githubusercontent.com/26390946/161375563-69c634fd-89d2-45ac-addd-931b03996b34.png">
+    </a>
+    <a href="https://ko-fi.com/mrrhak">
+      <img width="150" alt="Ko-fi" src="https://user-images.githubusercontent.com/26390946/161375565-e7d64410-bbcf-4a28-896b-7514e106478e.png">
+    </a>
+  </div>
+  <!--  Donations -->
+</div>
 
-## Requirements
+<div align="center">
+  <a href="https://pub.dev/packages/secure_screen_privacy">
+    <img src="https://img.shields.io/pub/v/secure_screen_privacy?label=Pub&logo=dart"
+      alt="Pub Package" />
+  </a>
+  <a href="https://pub.dev/packages/secure_screen_privacy">
+    <img src="https://img.shields.io/pub/likes/secure_screen_privacy?style=flat&logo=dart&label=Likes" alt="Pub Likes"/>
+  </a>
+  <a href="https://pub.dev/packages/secure_screen_privacy/score">
+    <img src="https://img.shields.io/pub/points/secure_screen_privacy?label=Score&logo=dart"
+      alt="Pub Score" />
+  </a>
+  <a href="https://pub.dev/packages/secure_screen_privacy">
+    <img alt="Pub Monthly Downloads" src="https://img.shields.io/pub/dm/secure_screen_privacy?style=flat&color=blue&logo=dart&label=Downloads">
+  </a>
+  <a href="https://github.com/mrrhak/secure_screen_privacy"><img src="https://img.shields.io/github/stars/mrrhak/secure_screen_privacy.svg?style=flat&logo=github&colorB=deeppink&label=Stars" alt="Star on Github"></a>
+  <a href="https://github.com/mrrhak/secure_screen_privacy"><img src="https://img.shields.io/github/forks/mrrhak/secure_screen_privacy?color=orange&label=Forks&logo=github" alt="Forks on Github"></a>
+  <a href="https://github.com/mrrhak/secure_screen_privacy/graphs/contributors">
+    <img src="https://img.shields.io/github/contributors/mrrhak/secure_screen_privacy.svg?style=flat&logo=github&colorB=yellow&label=Contributors"
+      alt="Contributors" />
+  </a>
+  <a href="https://github.com/mrrhak/secure_screen_privacy">
+    <img src="https://img.shields.io/github/languages/code-size/mrrhak/secure_screen_privacy?logo=github&color=blue&label=Size"
+      alt="Code size" />
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/github/license/mrrhak/secure_screen_privacy?label=License&color=red&logo=Leanpub"
+      alt="License: MIT" />
+  </a>
+  <a href="https://pub.dev/packages/secure_screen_privacy">
+    <img src="https://img.shields.io/badge/Platform-Android%20|%20iOS-blue.svg?logo=flutter"
+      alt="Platform" />
+  </a>
+</div>
 
-- Flutter 3.38 or newer (Dart 3.10 or newer). The iOS side uses Flutter's
-  scene lifecycle API, which first shipped in Flutter 3.38.
-- Android 7.0 (API 24) or newer.
-- iOS 13 or newer.
+<p align="center">
+  <a href="#-installation">Install</a> ·
+  <a href="#-usage">Usage</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-platform-support">Platforms</a> ·
+  <a href="#-notes">Notes</a> ·
+  <a href="https://pub.dev/documentation/secure_screen_privacy/latest/">API docs</a> ·
+  <a href="https://github.com/mrrhak/secure_screen_privacy/tree/master/example">Example</a>
+</p>
 
-## Usage
+---
 
-### Block screenshots & screen recording
+## ✨ Why secure_screen_privacy?
+
+- **Everything in one place.** Screenshot blocking, App Switcher privacy,
+  and screenshot and recording alerts, with one API on Android and iOS.
+- **Protect only the screens that need it.** Add one navigator observer and
+  list your sensitive routes. It works with `Navigator`, go_router and
+  auto_route.
+- **No permission prompts.** It never asks for storage, photos or media
+  access. The only permissions it uses are granted at install time, and the
+  user never sees them.
+- **Safe by default.** If something is missing, such as the App Switcher
+  image, your screen stays covered instead of showing.
+
+## 🧩 Features
+
+- Block screenshots and screen recording of your app
+- Hide your app in the App Switcher with a blur, a solid color, an image, or
+  an image over a blur (iOS), or a plain card in your color (Android)
+- Turn protection on and off per route, including dialogs, bottom sheets,
+  nested navigators, go_router and auto_route
+- A stream of screenshot events
+- A stream of screen recording and mirroring start and stop events
+- Works with iPad multi-window: each window protects itself
+
+## 📦 Installation
+
+```sh
+flutter pub add secure_screen_privacy
+```
+
+It requires Flutter 3.38 or newer, Android 7.0 (API 24) or newer and iOS 13
+or newer.
+
+```dart
+import 'package:secure_screen_privacy/secure_screen_privacy.dart';
+```
+
+## 🚀 Usage
+
+All calls go through one object:
 
 ```dart
 final privacy = SecureScreenPrivacy();
-
-await privacy.enableCaptureProtection();
-await privacy.disableCaptureProtection();
-final isEnabled = await privacy.isCaptureProtectionEnabled();
 ```
 
-> **Note:** with only `enableCaptureProtection` on (no app switcher protection),
-> the OS app switcher / recents preview will show a plain blank card while
-> backgrounded. That's the underlying OS mechanism itself — Android's
-> `FLAG_SECURE` and iOS's secure-text-entry trick both blank any capture of
-> the window, including the app switcher snapshot, not just screenshots/
-> recording — not a plugin bug. Pair it with `enableAppSwitcherProtection`
-> below if you want something other than plain black shown there.
-
-> **iPad multi-window:** if your app supports multiple windows
-> (`UIApplicationSupportsMultipleScenes`), each window runs its own Flutter
-> engine, and protection applies to the window whose code called
-> `enableCaptureProtection`. Enable it in each window that needs it.
-
-### App switcher protection
+### Block screenshots and screen recording
 
 ```dart
+await privacy.enableCaptureProtection();
+await privacy.disableCaptureProtection();
+
+final isOn = await privacy.isCaptureProtectionEnabled();
+```
+
+Screenshots and recordings of your app come out blank while it's on.
+
+### Hide the app in the App Switcher
+
+```dart
+// A blur of the current screen.
 await privacy.enableAppSwitcherProtection(
   AppSwitcherProtectionMode.blur,
-  blurIntensity: BlurIntensity.medium, // blur only
+  blurIntensity: BlurIntensity.medium,
 );
 
+// A solid color (ARGB).
 await privacy.enableAppSwitcherProtection(
   AppSwitcherProtectionMode.color,
-  color: 0xFF000000, // color only, ARGB
-);
-
-await privacy.enableAppSwitcherProtection(
-  AppSwitcherProtectionMode.image,
-  imageBackgroundColor: 0xFF000000, // image only, ARGB
-);
-
-await privacy.enableAppSwitcherProtection(
-  AppSwitcherProtectionMode.imageBlur,
-  blurIntensity: BlurIntensity.medium, // blur intensity
+  color: 0xFF1E3A8A,
 );
 
 await privacy.disableAppSwitcherProtection();
-final isEnabled = await privacy.isAppSwitcherProtectionEnabled();
+final isOn = await privacy.isAppSwitcherProtectionEnabled();
 ```
 
-`blurIntensity` has four levels — `ultraLight` (default), `light`, `medium`,
-`heavy` — mapped on iOS to increasingly opaque `UIBlurEffect` materials.
+| Mode | iOS shows | Android shows |
+| --- | --- | --- |
+| `blur` | a blur of the screen | a card in your theme's background color |
+| `color` | `color` | a card in `color` |
+| `image` | your image on `imageBackgroundColor` | a card in `imageBackgroundColor` |
+| `imageBlur` | your image over a blur | a card in your theme's background color |
 
-Shows a blur, a static image (optionally over a blurred backdrop), or a
-solid color in the iOS App Switcher preview instead of your live UI
-whenever the app is backgrounded (Android shows a plain card instead, see
-[Android: a plain card in a colour you choose](#android-a-plain-card-in-a-colour-you-choose)).
+`blurIntensity` is `ultraLight` (default), `light`, `medium` or `heavy`.
 
-`AppSwitcherProtectionMode.image` and `AppSwitcherProtectionMode.imageBlur`
-require the host app to bundle an image set named `SecureScreenPrivacyImage`
-in `Assets.xcassets` **on iOS**. If that image is missing, protection still
-turns on (and `enableAppSwitcherProtection` returns `true`) so the screen is
-never left visible: `image` falls back to a plain `imageBackgroundColor`
-cover and `imageBlur` to a plain blur, and a warning is logged to the Xcode
-console. The image is shown at its correct aspect ratio (never cropped or
-stretched); `imageBackgroundColor` fills any resulting letterbox/pillarbox
-bars and shows through transparent areas of the image itself. Android has
-no equivalent resource requirement, since it doesn't render an image
-overlay.
+**Image modes:** add an image set named `SecureScreenPrivacyImage` to your
+iOS app's `Assets.xcassets`. It's shown at its own aspect ratio, never
+cropped, with `imageBackgroundColor` filling the rest. Android needs no
+image.
 
-> **`imageBlur` note:** shows the same bundled image as `image` mode, but
-> over a live blur of the screen (the same blur `blur` mode uses) instead of
-> a solid color, so `imageBackgroundColor` isn't used. The blur and the
-> image appear together in one step, so there's no moment where one shows
-> without the other.
+<img src="https://raw.githubusercontent.com/mrrhak/secure_screen_privacy/master/doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain teal card for the protected app in color mode">
 
-> **iOS note:** if `enableCaptureProtection` is also on, it's transiently
-> disabled while the overlay is shown (otherwise the OS would blank the
-> snapshot regardless of the overlay) and restored as soon as the app
-> returns to the foreground. The overlay itself is shown on
-> `applicationWillResignActive` / `sceneWillResignActive`, since that's what
-> fires before the interactive App Switcher preview snapshot is captured.
-> That hook also fires on transient interruptions (incoming call, Siri,
-> Control Center, share sheet), so the overlay will briefly flash in those
-> cases too — this is inherent to the technique, not a bug.
+### Protect only some screens
 
-#### Android: a plain card in a colour you choose
-
-Android can't draw a blur or an image in the App Switcher. While protection
-is on, it shows a **plain card** instead, with your app's content hidden.
-
-On **Android 13 (API 33) and newer** the plugin sets that card's colour:
-
-| `mode` | Card colour on Android |
-| --- | --- |
-| `color` | `color` |
-| `image` | `imageBackgroundColor` |
-| `blur`, `imageBlur` | your app theme's background colour (`android:colorBackground`), following dark/light mode straight away |
-| capture protection only | your app theme's background colour |
-
-`blurIntensity` is ignored on Android. On **Android 12 and older** the card
-uses the theme's background colour as it was when the app started, so after a
-dark/light switch it keeps the old colour until the app restarts.
-
-<img src="doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain teal card for the protected app in color mode">
-
-The card colour is set with `Activity.setTaskDescription`. The plugin keeps
-the label and colours Flutter sets there (from `MaterialApp.title` and
-`color`), but if your app calls `setTaskDescription` with its own icon, that
-icon isn't kept while protection is on.
-
-Why not a real blur or image cover on Android?
-
-- Protection on Android uses `FLAG_SECURE`, and Android leaves the content
-  out of the App Switcher picture of a `FLAG_SECURE` window, so anything an
-  app draws there is left out too. A cover would only show with
-  `FLAG_SECURE` off, which would also let screenshots through.
-- A blur never makes it into the App Switcher picture: Android takes the
-  picture before a blur can finish drawing.
-- No app-level technique (a custom cover, a `RenderEffect` blur,
-  `PixelCopy`, or `FLAG_SECURE` itself) hides the app's live screen while it
-  is still open: opening the App Switcher straight from the app, or the
-  "swipe up and hold" gesture, shows the real screen for that moment, because
-  Android draws the app's actual window there. Once the app is in the
-  background, its card is blank. This is a known Android limit.
-
-### Per-route protection
-
-`SecureScreenPrivacyNavigatorObserver` turns protection on and off as the
-user moves between routes. Each route gets its own `SecureRouteConfig`;
-routes with no entry use `defaultConfig` (everything off).
+Add `SecureScreenPrivacyNavigatorObserver` and give each sensitive route a
+`SecureRouteConfig`. Routes that aren't listed use `defaultConfig`, which is
+everything off.
 
 ```dart
 MaterialApp(
   navigatorObservers: [
     SecureScreenPrivacyNavigatorObserver(
       policies: {
+        // Block screenshots only.
         '/payment': const SecureRouteConfig(captureProtection: true),
+        // Hide in the App Switcher only.
         '/profile': const SecureRouteConfig(
           appSwitcherMode: AppSwitcherProtectionMode.blur,
         ),
-        '/pin-dialog': const SecureRouteConfig(captureProtection: true),
+        // Both.
+        '/wallet': const SecureRouteConfig(
+          captureProtection: true,
+          appSwitcherMode: AppSwitcherProtectionMode.color,
+        ),
       },
     ),
   ],
-);
+)
 ```
 
-**Dialogs and bottom sheets** are left alone unless their route name is in
-`policies`, so menus and dropdowns never change protection. To protect one,
-give it a name and add that name to `policies`:
+**Dialogs and bottom sheets** don't change protection unless you name them
+and list the name:
 
 ```dart
 showDialog(
@@ -172,125 +201,181 @@ showDialog(
 );
 ```
 
-When it closes, the policy of whatever is under it applies again.
-`showDialog` and `showModalBottomSheet` use the root `Navigator` by default,
-so the observer must be on that `Navigator` (as in `MaterialApp` above).
+When it closes, the screen under it gets its own protection back.
 
-**Nested navigators** (tabs, shell routes, a `Navigator` inside a page):
-give each `Navigator` its own observer, and they work together. Protection
-is on when any showing navigator's current route wants it, and the app
-switcher mode comes from the innermost one that sets a mode. A nested
-navigator stops counting once the page holding it is covered by another
-page or popped. Tabs kept alive side by side all count, so a protected route
-on a hidden tab keeps protection on until that tab navigates.
+**go_router:**
 
-**go_router and auto_route** work too. Pages added below the one showing
-(a deep link that opens several pages, auto_route's `insert`) don't change
-protection until they're on top.
+```dart
+GoRouter(
+  observers: [SecureScreenPrivacyNavigatorObserver(policies: policies)],
+  routes: [...],
+)
+```
 
-- go_router: pass the observer in `GoRouter(observers: [...])`. A page's
-  name is the `GoRoute`'s `name`, or its `path` when it has none.
-- auto_route: pass it in
-  `router.config(navigatorObservers: () => [...])`. A page's name is the
-  route's name, for example `PaymentRoute`.
+A page's name is the `GoRoute`'s `name`, or its `path` when it has none.
 
-### Screenshot detection
+**auto_route:**
 
-Get notified when the user takes a screenshot:
+```dart
+MaterialApp.router(
+  routerConfig: router.config(
+    navigatorObservers: () => [
+      SecureScreenPrivacyNavigatorObserver(policies: policies),
+    ],
+  ),
+)
+```
+
+A page's name is the route's name, such as `PaymentRoute`.
+
+### Detect screenshots
 
 ```dart
 final subscription = privacy.screenshotEvents.listen((event) {
-  print('Screenshot detected at ${event.timestamp}');
+  print('Screenshot at ${event.timestamp}');
 });
 
-// Later:
+// Stop listening:
 await subscription.cancel();
 ```
 
-Subscribing to `screenshotEvents` *is* what starts native detection
-(Android 14+: `Activity.ScreenCaptureCallback`; older Android: a
-`ContentObserver` on the images `MediaStore`; iOS:
-`UIApplication.userDidTakeScreenshotNotification`); cancelling the
-subscription stops it. There's no separate start/stop method. `ScreenshotEvent`
-carries only a `timestamp` — no file path or image data.
+Listening starts detection and cancelling stops it. An event carries only
+the time, never the image.
 
-Detection is best-effort and has real platform-specific caveats:
-
-> **Android 14+ (API 34+):** uses the OS's own screenshot callback, so each
-> screenshot of your app is reported exactly once. It only fires while your
-> app's screen is visible. The plugin
-> declares the `DETECT_SCREEN_CAPTURE` permission for this. It's an
-> install-time permission, never shown to the user, not a storage/media
-> permission, and it's merged into your app's manifest automatically.
-
-> **Android 13 and below:** no storage/media permission is requested, so detection
-> uses a heuristic filter over `MediaStore` change notifications (matching a
-> "screenshot" substring in the file's name/path, and requiring the row to be
-> freshly added) to avoid reporting every new photo/download as a screenshot.
-> When the underlying metadata can't be read at all, the filter fails *open*
-> (still emits) rather than silently dropping a real screenshot — so it can
-> both under- and over-report depending on locale (a localized display name
-> like "Bildschirmfoto" won't match) and OEM (custom screenshot folder
-> naming). Deleted images are ignored, and the several notifications a single
-> screenshot produces are merged into one event (anything within 1.5 seconds
-> of the last event is dropped). New images saved by other apps can still be
-> reported. Not confirmed across real hardware/OEM variance.
-
-> **Android, while capture protection is on:** a screenshot attempt is still
-> reported on every Android version, even though the saved image is black
-> (`FLAG_SECURE` blanks the content but doesn't stop the system from taking
-> the screenshot). Use the event to react to the attempt; the content itself
-> stayed hidden.
-
-> **iOS note:** uses `UIApplication.userDidTakeScreenshotNotification`, which
-> never provides a file path or image data — this is why the payload is
-> timestamp-only by design, not a placeholder workaround.
-
-> **Scope:** on Android 14+ only screenshots of your visible app are
-> reported. On Android 13 and below detection is MediaStore-wide, and on iOS
-> it's a process-wide notification. On those, pair the subscription with your
-> own app-foreground tracking if you need to filter it down.
-
-### Screen recording detection
-
-Get notified when the screen starts or stops being recorded/mirrored:
+### Detect screen recording
 
 ```dart
 final subscription = privacy.screenRecordingEvents.listen((event) {
   switch (event.state) {
     case ScreenRecordingState.recording:
-      print('Recording started at ${event.timestamp}');
+      print('Recording started');
     case ScreenRecordingState.notRecording:
-      print('Recording stopped at ${event.timestamp}');
+      print('Recording stopped');
     case ScreenRecordingState.unknown:
-      print("This device can't detect screen recording");
+      print("This device can't detect recording");
   }
 });
-
-// Later:
-await subscription.cancel();
 ```
 
-Subscribing to `screenRecordingEvents` *is* what starts native detection
-(Android: `WindowManager.addScreenRecordingCallback` on API 35+; iOS:
-`UIScreen.capturedDidChangeNotification`); cancelling the subscription stops
-it. There's no separate start/stop method. The current state is emitted
-immediately on subscribe, so a late subscriber doesn't miss an
-already-in-progress recording. No runtime permission is required on either
-platform (on Android 15+ it uses the install-time `DETECT_SCREEN_RECORDING`
-permission, which the plugin declares for you and the user never sees).
+You get the current state as soon as you listen, then each change.
 
-> **Android note:** recording detection needs **Android 15 (API 35)** or
-> newer, where `WindowManager.addScreenRecordingCallback` gives true start
-> *and* stop detection. **Below API 35** Android 14 has no screen-recording
-> signal, so the stream sends one `ScreenRecordingState.unknown` event on
-> subscribe and nothing after. (`event.isRecording` is `false` for both
-> `notRecording` and `unknown`; check `event.state` to tell them apart.) (Its
-> `Activity.ScreenCaptureCallback` fires for screenshots, not recordings;
-> see `screenshotEvents`.)
+## 📱 Platform support
 
-> **iOS note:** uses `UIScreen.capturedDidChangeNotification`, which reports
-> a live `isCaptured` boolean rather than a directional start/stop event, so
-> a single observer correctly reports both start and stop. There's no de-duplication: a notification for an
-> unrelated screen/scene (e.g. an external display in a multi-scene app) can
-> re-emit an unchanged value.
+| Feature | Android | iOS |
+| --- | --- | --- |
+| Block screenshots | ✅ | ✅ |
+| Block screen recording | ✅ | ✅ |
+| App Switcher: hide content | ✅ | ✅ |
+| App Switcher: `blur` | ❌ plain card | ✅ |
+| App Switcher: `blurIntensity` | ❌ | ✅ |
+| App Switcher: `color` | ✅ Android 13+ (card color) | ✅ |
+| App Switcher: `image` | ❌ card in `imageBackgroundColor` | ✅ |
+| App Switcher: `imageBlur` | ❌ plain card | ✅ |
+| Card follows dark/light mode | ✅ Android 13+ | — |
+| Per-route protection | ✅ | ✅ |
+| Dialog and bottom sheet protection | ✅ | ✅ |
+| go_router and auto_route | ✅ | ✅ |
+| Screenshot events | ✅ | ✅ |
+| Screenshot events of your app only | ✅ Android 14+ | ✅ |
+| Screen recording start and stop events | ✅ Android 15+ | ✅ |
+| Multi-window (each window protected on its own) | — | ✅ iPad |
+| Minimum version | Android 7.0 (API 24) | iOS 13 |
+
+✅ supported · ❌ not supported · — not applicable
+
+## 📝 Notes
+
+<details>
+<summary>Behavior details and tips (click to expand)</summary>
+
+**Blocking screenshots**
+
+- With only screenshot blocking on, the App Switcher shows a blank card for
+  your app. That's the operating system hiding the window, not a bug. Turn
+  on App Switcher protection to choose what shows there instead.
+- iPad multi-window: each window runs its own Flutter engine, so protection
+  applies to the window whose code turned it on. Turn it on in each window
+  that needs it.
+
+**App Switcher on iOS**
+
+- The cover shows when the app stops being active. That also happens for a
+  phone call, Siri, Control Center or a share sheet, so the cover flashes
+  briefly then too.
+- While the cover shows, screenshot blocking is paused, so the cover itself
+  can appear in the App Switcher. It comes back on as soon as the app is
+  active again.
+- Without the `SecureScreenPrivacyImage` asset, `image` shows just
+  `imageBackgroundColor` and `imageBlur` just the blur, and a warning is
+  logged in Xcode.
+
+**App Switcher on Android**
+
+- Android can't draw a blur or an image in the App Switcher. Protection uses
+  `FLAG_SECURE`, which hides your content and shows a plain card.
+- On Android 13 and newer the card's color follows the table above, and
+  changes right away when the device switches between dark and light mode.
+  On Android 12 and older it uses your theme's background color from when
+  the app started.
+- The card color is set with `setTaskDescription`. The label and colors
+  Flutter sets there are kept, but a custom task icon isn't while protection
+  is on.
+- Opening the App Switcher straight from the app, or the "swipe up and hold"
+  gesture, still shows the live screen for that moment. Android draws the
+  real window there, and no app can stop it. Once the app is in the
+  background, its card is blank.
+
+**Per-route protection**
+
+- `showDialog` and `showModalBottomSheet` use the root `Navigator`, so put the
+  observer on that one (as in `MaterialApp` above).
+- Nested navigators (tabs, shell routes): give each `Navigator` its own
+  observer. Protection is on when any showing navigator wants it, and the App
+  Switcher mode comes from the innermost one that sets a mode. Tabs kept alive
+  side by side all count, so a protected route on a hidden tab keeps
+  protection on until that tab navigates.
+- Pages added below the one showing (a deep link that opens several pages,
+  auto_route's `insert`) don't change protection until they're on top.
+
+**Screenshot events**
+
+- Android 14 and newer: the system reports each screenshot of your app once,
+  only while your app is on screen. This uses the `DETECT_SCREEN_CAPTURE`
+  permission, which is granted at install time, is never shown to the user,
+  and is added to your app for you.
+- Android 13 and older: there's no screenshot signal, so the plugin watches
+  for new images whose name contains "screenshot". Images from other apps
+  can sometimes be reported, and screenshots with a translated file name
+  (like "Bildschirmfoto") can be missed.
+- On Android a screenshot attempt is reported even while blocking is on.
+  The saved image is black, but you can still react to the attempt.
+- iOS: only screenshots taken while your app is on screen are reported,
+  also when it's visible but not in front (behind Control Center, or in
+  iPad Split View).
+- On Android 13 and older, screenshots are reported while your app runs in
+  the background too. Check that your app is in the foreground if you need
+  to.
+
+**Screen recording events**
+
+- Android 15 and newer report recording start and stop. This uses the
+  `DETECT_SCREEN_RECORDING` permission, granted at install time and added
+  for you.
+- Android 14 and older can't detect recording: the stream sends one
+  `unknown` event and nothing after. `event.isRecording` is false for both
+  `notRecording` and `unknown`, so check `event.state` to tell them apart.
+- On iOS, mirroring the screen (AirPlay) counts as recording.
+
+</details>
+
+## 🐞 Bugs or Requests
+
+If you encounter any problems, feel free to open an [issue](https://github.com/mrrhak/secure_screen_privacy/issues/new). If you feel the library is missing a feature, please raise a [ticket](https://github.com/mrrhak/secure_screen_privacy/issues/new) on GitHub and I'll look into it. Pull requests are also welcome.
+
+## 💖 Support
+
+Don't forget to give it a like 👍 or a star ⭐
+
+## 📄 License
+
+MIT. See [LICENSE](LICENSE).
