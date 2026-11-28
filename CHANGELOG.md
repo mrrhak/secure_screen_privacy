@@ -45,7 +45,8 @@ First release.
   stops, with `ScreenRecordingState` (`recording`, `notRecording`,
   `unknown`). It sends the current state first, then only changes.
 - Android 14 and newer use the system screenshot callback, so each
-  screenshot is reported once. Android 15 and newer detect recording. Older
+  screenshot is reported once. On iOS only screenshots taken while your app
+  is on screen are reported. Android 15 and newer detect recording. Older
   versions send `unknown`.
 - No storage, photos or media permission is ever requested. The
   `DETECT_SCREEN_CAPTURE` and `DETECT_SCREEN_RECORDING` permissions are

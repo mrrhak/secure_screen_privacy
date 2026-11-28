@@ -276,7 +276,7 @@ You get the current state as soon as you listen, then each change.
 | Dialog and bottom sheet protection | ✅ | ✅ |
 | go_router and auto_route | ✅ | ✅ |
 | Screenshot events | ✅ | ✅ |
-| Screenshot events of your app only | ✅ Android 14+ | ❌ |
+| Screenshot events of your app only | ✅ Android 14+ | ✅ |
 | Screen recording start and stop events | ✅ Android 15+ | ✅ |
 | Multi-window (each window protected on its own) | — | ✅ iPad |
 | Minimum version | Android 7.0 (API 24) | iOS 13 |
@@ -349,9 +349,12 @@ You get the current state as soon as you listen, then each change.
   (like "Bildschirmfoto") can be missed.
 - On Android a screenshot attempt is reported even while blocking is on.
   The saved image is black, but you can still react to the attempt.
-- On iOS and Android 13 and older, screenshots are reported while your app
-  runs in the background too. Check that your app is in the foreground if
-  you need to.
+- iOS: only screenshots taken while your app is on screen are reported,
+  also when it's visible but not in front (behind Control Center, or in
+  iPad Split View).
+- On Android 13 and older, screenshots are reported while your app runs in
+  the background too. Check that your app is in the foreground if you need
+  to.
 
 **Screen recording events**
 
