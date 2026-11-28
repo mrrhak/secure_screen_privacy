@@ -204,7 +204,7 @@ jobs:
       # newer Dart than this Flutter has; the tests don't use it.
       - name: Install Dependencies
         run: |
-          flutter pub remove pigeon --no-example
+          sed -i "/^  pigeon:/d" pubspec.yaml
           flutter pub get --no-example
 
       - name: Test
