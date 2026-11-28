@@ -378,7 +378,9 @@ You get the current state as soon as you listen, then each change.
 
 ## 🐞 Bugs or Requests
 
-If you encounter any problems, feel free to open an [issue](https://github.com/mrrhak/secure_screen_privacy/issues/new). If you feel the library is missing a feature, please raise a [ticket](https://github.com/mrrhak/secure_screen_privacy/issues/new) on GitHub and I'll look into it. Pull requests are also welcome.
+If you encounter any problems, feel free to open an [issue](https://github.com/mrrhak/secure_screen_privacy/issues/new?template=bug_report.md). If you feel the library is missing a feature, please raise a [ticket](https://github.com/mrrhak/secure_screen_privacy/issues/new?template=feature_request.md) on GitHub and I'll look into it. Pull requests are also welcome.
+
+See [CONTRIBUTING.md](https://github.com/mrrhak/secure_screen_privacy/blob/master/CONTRIBUTING.md).
 
 ## 💖 Support
 
