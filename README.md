@@ -110,8 +110,8 @@
 
 <p align="center">
   <sub>Pick one with <code>enableAppSwitcherProtection(AppSwitcherProtectionMode.…)</code>.
-  On Android the App Switcher shows a plain card in your color. See
-  <a href="#hide-the-app-in-the-app-switcher">Hide the app in the App Switcher</a>.</sub>
+  On Android the App Switcher shows a plain card instead. See
+  <a href="#app-switcher-modes-on-ios-and-android">App Switcher modes on iOS and Android</a>.</sub>
 </p>
 
 ---
@@ -147,12 +147,8 @@
 | Block screenshots | ✅ | ✅ |
 | Block screen recording | ✅ | ✅ |
 | App Switcher: hide content | ✅ | ✅ |
-| App Switcher: `blur` | ❌ plain card | ✅ |
-| App Switcher: `blurIntensity` | ❌ | ✅ |
-| App Switcher: `color` | ✅ Android 13+ (card color) | ✅ |
-| App Switcher: `image` | ❌ card in `imageBackgroundColor` | ✅ |
-| App Switcher: `imageBlur` | ❌ plain card | ✅ |
-| Card follows dark/light mode | ✅ Android 13+ | — |
+| App Switcher: blur and image | ❌ plain card ([details](#app-switcher-modes-on-ios-and-android)) | ✅ |
+| App Switcher: card color | ✅ Android 13+ | — |
 | Per-route protection | ✅ | ✅ |
 | Dialog and bottom sheet protection | ✅ | ✅ |
 | go_router and auto_route | ✅ | ✅ |
@@ -170,6 +166,21 @@ streams send no events (Flutter reports the failed subscription as a
 `MissingPluginException` through `FlutterError`). If your app also runs there,
 call the plugin only on Android and iOS (for example, check
 `defaultTargetPlatform` and `kIsWeb` first).
+
+### App Switcher modes on iOS and Android
+
+| Mode | iOS shows | Android shows |
+| --- | --- | --- |
+| `blur` | a blur of the screen (`blurIntensity` sets how strong) | no blur: a plain card in your theme's background color |
+| `color` | a solid `color` | a plain card in `color` |
+| `image` | your image on `imageBackgroundColor` | no image: a plain card in `imageBackgroundColor` |
+| `imageBlur` | your image over a blur of the screen | no image or blur: a plain card in your theme's background color |
+
+On Android every mode works the same way: it turns on `FLAG_SECURE`, so
+while App Switcher protection is on, screenshots and recordings of the app
+are blank too. The card color needs Android 13 or newer; on Android 12 and
+older every mode shows a plain card in your theme's background color.
+`blurIntensity` is ignored on Android.
 
 ## 📦 Installation
 
@@ -222,12 +233,8 @@ await privacy.disableAppSwitcherProtection();
 final isOn = await privacy.isAppSwitcherProtectionEnabled();
 ```
 
-| Mode | iOS shows | Android shows |
-| --- | --- | --- |
-| `blur` | a blur of the screen | a card in your theme's background color |
-| `color` | `color` | a card in `color` |
-| `image` | your image on `imageBackgroundColor` | a card in `imageBackgroundColor` |
-| `imageBlur` | your image over a blur | a card in your theme's background color |
+What each mode shows on iOS and Android is in
+[App Switcher modes on iOS and Android](#app-switcher-modes-on-ios-and-android).
 
 `blurIntensity` is `ultraLight` (default), `light`, `medium` or `heavy`.
 
@@ -365,12 +372,10 @@ You get the current state as soon as you listen, then each change.
 
 **App Switcher on Android**
 
-- Android can't draw a blur or an image in the App Switcher. Protection uses
-  `FLAG_SECURE`, which hides your content and shows a plain card.
-- On Android 13 and newer the card's color follows the table above, and
-  changes right away when the device switches between dark and light mode.
-  On Android 12 and older it uses your theme's background color from when
-  the app started.
+- On Android 13 and newer the card's color follows the
+  [mode table](#app-switcher-modes-on-ios-and-android), and changes right away when the device switches between
+  dark and light mode. On Android 12 and older it uses your theme's
+  background color from when the app started.
 - The card color is set with `setTaskDescription`. The label and colors
   Flutter sets there are kept, but a custom task icon isn't while protection
   is on.
