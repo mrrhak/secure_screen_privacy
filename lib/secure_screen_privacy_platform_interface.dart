@@ -6,6 +6,9 @@ import 'screen_recording_event.dart';
 import 'screenshot_event.dart';
 import 'secure_screen_privacy_method_channel.dart';
 
+/// The interface that platform implementations of this plugin extend.
+///
+/// Apps use `SecureScreenPrivacy` instead.
 abstract class SecureScreenPrivacyPlatform extends PlatformInterface {
   /// Constructs a SecureScreenPrivacyPlatform.
   SecureScreenPrivacyPlatform() : super(token: _token);
@@ -28,28 +31,36 @@ abstract class SecureScreenPrivacyPlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  /// The OS name and version. See `SecureScreenPrivacy.getPlatformVersion`.
   Future<String?> getPlatformVersion() {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
 
+  /// Blocks screenshots and screen recording. See
+  /// `SecureScreenPrivacy.enableCaptureProtection`.
   Future<bool> enableCaptureProtection() {
     throw UnimplementedError(
       'enableCaptureProtection() has not been implemented.',
     );
   }
 
+  /// Allows screenshots and screen recording again. See
+  /// `SecureScreenPrivacy.disableCaptureProtection`.
   Future<bool> disableCaptureProtection() {
     throw UnimplementedError(
       'disableCaptureProtection() has not been implemented.',
     );
   }
 
+  /// Whether capture protection is on.
   Future<bool> isCaptureProtectionEnabled() {
     throw UnimplementedError(
       'isCaptureProtectionEnabled() has not been implemented.',
     );
   }
 
+  /// Hides the app in the App Switcher. See
+  /// `SecureScreenPrivacy.enableAppSwitcherProtection`.
   Future<bool> enableAppSwitcherProtection(
     AppSwitcherProtectionMode mode, {
     BlurIntensity blurIntensity = BlurIntensity.ultraLight,
@@ -61,12 +72,14 @@ abstract class SecureScreenPrivacyPlatform extends PlatformInterface {
     );
   }
 
+  /// Shows the live app in the App Switcher again.
   Future<bool> disableAppSwitcherProtection() {
     throw UnimplementedError(
       'disableAppSwitcherProtection() has not been implemented.',
     );
   }
 
+  /// Whether App Switcher protection is on.
   Future<bool> isAppSwitcherProtectionEnabled() {
     throw UnimplementedError(
       'isAppSwitcherProtectionEnabled() has not been implemented.',

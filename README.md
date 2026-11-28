@@ -291,6 +291,11 @@ You get the current state as soon as you listen, then each change.
 
 ✅ supported · ❌ not supported · — not applicable
 
+Only Android and iOS are supported. On web, Windows, macOS and Linux every
+method throws a `MissingPluginException`, and the event streams send it as an
+error. If your app also runs there, call the plugin only on Android and iOS
+(for example, check `defaultTargetPlatform` and `kIsWeb` first).
+
 ## 📝 Notes
 
 <details>
@@ -310,6 +315,10 @@ You get the current state as soon as you listen, then each change.
 - The cover shows when the app stops being active. That also happens for a
   phone call, Siri, Control Center or a share sheet, so the cover flashes
   briefly then too.
+- iPad Split View and Slide Over: when the user taps the other app, your
+  app's window stops being the active one and gets covered, even though it
+  is still on screen. The cover goes away when the user taps back into your
+  app.
 - While the cover shows, screenshot blocking is paused, so the cover itself
   can appear in the App Switcher. It comes back on as soon as the app is
   active again.
@@ -335,6 +344,11 @@ You get the current state as soon as you listen, then each change.
 
 **Per-route protection**
 
+- The observer sets both screenshot blocking and App Switcher protection on
+  every route change, so it replaces anything you turned on yourself with
+  `enableCaptureProtection` or `enableAppSwitcherProtection`. Use one or the
+  other for a given setting, or put the protection you always want in
+  `defaultConfig`.
 - `showDialog` and `showModalBottomSheet` use the root `Navigator`, so put the
   observer on that one (as in `MaterialApp` above).
 - Nested navigators (tabs, shell routes): give each `Navigator` its own

@@ -56,8 +56,10 @@
     "Robolectric",
     "screencap",
     "screenrecord",
+    "simctl",
     "Siri",
     "SOPHEA",
+    "startswith",
     "sublayer",
     "sublayers",
     "subview",
@@ -65,9 +67,13 @@
     "superlayer",
     "superview",
     "swiftpm",
+    "udev",
+    "udevadm",
+    "udid",
     "webp",
     "xcassets",
     "xcprivacy",
+    "xcrun",
     "xcworkspace"
   ]
 }

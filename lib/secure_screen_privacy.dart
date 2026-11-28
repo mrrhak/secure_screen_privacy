@@ -11,19 +11,49 @@ export 'screenshot_event.dart';
 export 'secure_route_config.dart';
 export 'secure_screen_privacy_navigator_observer.dart';
 
+/// Screen privacy for Android and iOS: blocks screenshots and screen
+/// recording, hides the app in the App Switcher, and reports screenshots and
+/// screen recording.
+///
+/// Only Android and iOS are supported. On web, Windows, macOS and Linux every
+/// method throws a `MissingPluginException` and the streams emit it as an
+/// error, so check the platform first if your app also runs there.
+///
+/// If you also use [SecureScreenPrivacyNavigatorObserver], it sets capture
+/// and App Switcher protection on every route change, which replaces what
+/// these methods turned on. Use one or the other for a given setting, or put
+/// the protection you always want in the observer's `defaultConfig`.
 class SecureScreenPrivacy {
+  /// The OS name and version, for example `Android 14` or `iOS 18.0`.
+  ///
+  /// Mostly useful to check that the plugin is wired up.
   Future<String?> getPlatformVersion() {
     return SecureScreenPrivacyPlatform.instance.getPlatformVersion();
   }
 
+  /// Blocks screenshots and screen recording of the app until
+  /// [disableCaptureProtection] is called.
+  ///
+  /// Android sets `FLAG_SECURE` on the app's window, so screenshots and
+  /// recordings come out black. iOS shows the window as secure content, so it
+  /// is left out of screenshots and recordings. A call made before the screen
+  /// is ready (at app start) is kept and applied as soon as it is. Returns
+  /// `true` once the request is recorded.
   Future<bool> enableCaptureProtection() {
     return SecureScreenPrivacyPlatform.instance.enableCaptureProtection();
   }
 
+  /// Allows screenshots and screen recording again.
+  ///
+  /// On Android the window stays secure while App Switcher protection is
+  /// still on, since both use `FLAG_SECURE`. Returns `true` once the request
+  /// is recorded.
   Future<bool> disableCaptureProtection() {
     return SecureScreenPrivacyPlatform.instance.disableCaptureProtection();
   }
 
+  /// Whether capture protection was last turned on with
+  /// [enableCaptureProtection].
   Future<bool> isCaptureProtectionEnabled() {
     return SecureScreenPrivacyPlatform.instance.isCaptureProtectionEnabled();
   }
@@ -53,6 +83,12 @@ class SecureScreenPrivacy {
   /// colour read at app start. [blurIntensity] is ignored on Android. No
   /// app-level technique hides the live "swipe up and hold" recents peek on
   /// Android, so `FLAG_SECURE` is the most protection available there.
+  ///
+  /// **iPad note:** the cover goes up whenever the app's window stops being
+  /// the active one, so in Split View or Slide Over the app is covered while
+  /// the user works in the other app, even though it is still on screen.
+  ///
+  /// Returns `true` once the request is recorded.
   Future<bool> enableAppSwitcherProtection(
     AppSwitcherProtectionMode mode, {
     BlurIntensity blurIntensity = BlurIntensity.ultraLight,
@@ -67,10 +103,16 @@ class SecureScreenPrivacy {
     );
   }
 
+  /// Shows the live app in the App Switcher again.
+  ///
+  /// On Android the window stays secure while capture protection is still
+  /// on. Returns `true` once the request is recorded.
   Future<bool> disableAppSwitcherProtection() {
     return SecureScreenPrivacyPlatform.instance.disableAppSwitcherProtection();
   }
 
+  /// Whether App Switcher protection was last turned on with
+  /// [enableAppSwitcherProtection].
   Future<bool> isAppSwitcherProtectionEnabled() {
     return SecureScreenPrivacyPlatform.instance
         .isAppSwitcherProtectionEnabled();

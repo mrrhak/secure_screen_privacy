@@ -104,6 +104,68 @@ jobs:
         run: flutter build ios --simulator --debug
         working-directory: example
 
+  # Runs example/integration_test on an Android emulator, so the Kotlin
+  # plugin code runs for real (the unit tests above can't reach it).
+  android-integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # Hardware acceleration for the emulator on Linux runners.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Integration tests on an Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          working-directory: example
+          script: flutter test integration_test -d emulator-5554
+
+  # Runs example/integration_test on an iPhone simulator, so the Swift
+  # plugin code runs for real.
+  ios-integration-test:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Boot an iPhone simulator
+        id: simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          xcrun simctl boot "$UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Integration tests on the iPhone simulator
+        run: flutter test integration_test -d ${{ steps.simulator.outputs.udid }}
+        working-directory: example
+
   # The oldest Flutter that pubspec.yaml allows. The example needs a newer
   # one, so only the package is tested here.
   min-sdk:

@@ -51,6 +51,11 @@ import 'secure_screen_privacy.dart';
 /// parent has an observer too). Several nested navigators shown side by side
 /// or kept alive as tabs all count, so a protected route on a hidden tab
 /// keeps protection on until that tab navigates.
+///
+/// **Direct calls:** this observer sets both capture and App Switcher
+/// protection on every route change, so it replaces anything turned on with
+/// `SecureScreenPrivacy` methods. Use one or the other for a given setting,
+/// or put the protection you always want in [defaultConfig].
 class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
   SecureScreenPrivacyNavigatorObserver({
     this.policies = const {},
