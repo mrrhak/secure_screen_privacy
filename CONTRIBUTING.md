@@ -61,6 +61,10 @@ Tests:
 * Dart: `test/` (public API, Pigeon implementation, navigator observer).
 * Android: `android/src/test/`, run through the example app's Gradle build.
 * iOS: `example/ios/RunnerTests/`, run with Xcode against a simulator.
+* Integration: `example/integration_test/`, not run in CI. Run them by hand on
+  an Android emulator and an iPhone simulator (or devices) after native
+  changes: `cd example && flutter test integration_test -d <device id>`
+  (`flutter devices` lists the ids).
 
 ## Reporting a bug
 
