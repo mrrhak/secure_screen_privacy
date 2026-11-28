@@ -3,6 +3,18 @@ description: "Flutter plugin for capture protection (block screenshots/recording
 version: 0.0.1
 repository: https://github.com/mrrhak/secure_screen_privacy
 issue_tracker: https://github.com/mrrhak/secure_screen_privacy/issues
+funding:
+  - https://ko-fi.com/mrrhak
+  - https://www.buymeacoffee.com/mrrhak
+topics:
+  - privacy
+  - security
+  - screenshot
+  - screen-recording
+  - secure-screen
+screenshots:
+  - description: "Android App Switcher showing a plain teal card for the protected app in color mode"
+    path: doc/images/android_app_switcher.png
 
 environment:
   sdk: ^3.10.0

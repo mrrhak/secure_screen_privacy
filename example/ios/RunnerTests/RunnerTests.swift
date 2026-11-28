@@ -107,7 +107,23 @@ class RunnerTests: XCTestCase {
     own.rootViewController = UIViewController()
     own.isHidden = false
     otherTestWindow = own
+    try waitUntilActiveWindow(is: active)
     return (active, own)
+  }
+
+  // The fallback picks the key window of the foreground-active scene. A
+  // freshly launched test host (each parallel-testing clone is one) can run
+  // the first test before its scene is foreground-active or before makeKey()
+  // has taken effect, so activeWindow() was sometimes nil and the fallback
+  // tests failed about 1 run in 3. Wait for both, up to a few seconds.
+  private func waitUntilActiveWindow(is window: UIWindow) throws {
+    let deadline = Date().addingTimeInterval(5)
+    while Date() < deadline {
+      if window.windowScene?.activationState == .foregroundActive, window.isKeyWindow { return }
+      window.makeKey()
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    XCTFail("the test window never became the key window of a foreground-active scene")
   }
 
   func testEnableCaptureProtection_protectsItsOwnWindow_notTheActiveOne() throws {

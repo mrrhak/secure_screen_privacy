@@ -180,11 +180,13 @@ class SecureScreenPrivacyPlugin :
 
     // Screenshot detection
     //
-    // Subscribing to the Dart stream (onListen) starts a ContentObserver on
-    // the images MediaStore; cancelling (onCancel) stops it. There is no
-    // separate start/stop method - the subscription is the toggle. See
-    // shouldEmitScreenshotEvent for the filtering heuristic and its
-    // documented tradeoffs.
+    // Subscribing to the Dart stream (onListen) starts detection; cancelling
+    // (onCancel) stops it. There is no separate start/stop method - the
+    // subscription is the toggle. API 34+ registers the Activity's
+    // ScreenCaptureCallback. Below API 34 a ContentObserver on the images
+    // MediaStore runs while the plugin's Activity is started (see
+    // updateScreenshotObserver); see shouldEmitScreenshotEvent for its
+    // filtering heuristic and documented tradeoffs.
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
         screenshotEventSink = events
@@ -730,8 +732,9 @@ class SecureScreenPrivacyPlugin :
 // false positive (e.g. the user saved a photo from a messaging app) does
 // not. This is a deliberate improvement over the sibling no_screenshot
 // plugin, which treats any MediaStore.Images change as a screenshot with no
-// filtering at all. No permission is requested for this (see
-// AndroidManifest.xml, which stays empty), so the filter is inherently
+// filtering at all. No storage/media permission is requested for this
+// (AndroidManifest.xml only declares the install-time
+// DETECT_SCREEN_CAPTURE and DETECT_SCREEN_RECORDING), so the filter is inherently
 // best-effort: it can both under- and over-report depending on locale/OEM
 // (see relativePathOrData/displayName comments below) and is not confirmed
 // across real hardware/OEM variance.

@@ -11,7 +11,6 @@
 *.log
 /build/
 /coverage/
-doc/
 pubspec.lock
 
 # Repo tooling, not needed to use the package.
@@ -20,6 +19,8 @@ cspell.json
 
 # Native unit tests run in this repo's CI only.
 /android/src/test/
+
+# doc/images is kept: pubspec.yaml lists a screenshot from it for pub.dev.
 
 # The example's platform runners aren't needed to read the example, and
 # README images load from GitHub.
