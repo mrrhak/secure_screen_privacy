@@ -96,8 +96,26 @@ class SecureScreenPrivacyNavigatorObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (!_isTracked(route)) return;
+    if (route.navigator != null && !route.isCurrent) {
+      // Added below the top, e.g. a page inserted under the top one in
+      // Navigator.pages (go_router and other declarative routers). What
+      // shows is unchanged, so only record where it sits. Before, its
+      // policy was applied and replaced the protection of the page on top.
+      _trackedRoutes.insert(_indexAbove(previousRoute), route);
+      return;
+    }
     _trackedRoutes.add(route);
     _applyPolicyForRoute(route);
+  }
+
+  // Where a route added right above [below] goes in _trackedRoutes: just
+  // after it, at the bottom when nothing is below, or just under the top
+  // when [below] is a route this observer doesn't know (an ignored popup).
+  int _indexAbove(Route<dynamic>? below) {
+    if (below == null) return 0;
+    final index = _trackedRoutes.indexOf(below);
+    if (index >= 0) return index + 1;
+    return _trackedRoutes.isEmpty ? 0 : _trackedRoutes.length - 1;
   }
 
   @override

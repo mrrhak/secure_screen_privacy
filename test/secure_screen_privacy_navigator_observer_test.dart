@@ -1104,4 +1104,116 @@ void main() {
       },
     );
   });
+
+  // Declarative routing (Navigator.pages), as go_router and similar use.
+  group('page lists', () {
+    Widget pages(
+      SecureScreenPrivacyNavigatorObserver observer,
+      List<String> names,
+    ) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Navigator(
+        observers: [observer],
+        pages: [for (final name in names) _FakePage(name)],
+        onDidRemovePage: (_) {},
+      ),
+    );
+
+    String lastCaptureCall() => fakePlatform.calls.lastWhere(
+      (call) => call.endsWith('CaptureProtection'),
+    );
+
+    testWidgets('a page added under the top one does not apply its policy', (
+      tester,
+    ) async {
+      final observer = SecureScreenPrivacyNavigatorObserver(
+        policies: {
+          '/pay': const SecureRouteConfig(captureProtection: true),
+          '/list': const SecureRouteConfig(),
+        },
+      );
+      await tester.pumpWidget(pages(observer, ['/home', '/pay']));
+      await tester.pumpAndSettle();
+      expect(lastCaptureCall(), 'enableCaptureProtection');
+      fakePlatform.calls.clear();
+
+      await tester.pumpWidget(pages(observer, ['/home', '/list', '/pay']));
+      await tester.pumpAndSettle();
+
+      expect(fakePlatform.calls, isEmpty);
+    });
+
+    testWidgets(
+      'removing the top page then shows the added page with its policy',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/pay': const SecureRouteConfig(captureProtection: true),
+            '/secret': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        await tester.pumpWidget(pages(observer, ['/home', '/pay']));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(pages(observer, ['/home', '/secret', '/pay']));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(pages(observer, ['/home', '/secret']));
+        await tester.pumpAndSettle();
+        expect(lastCaptureCall(), 'enableCaptureProtection');
+
+        await tester.pumpWidget(pages(observer, ['/home']));
+        await tester.pumpAndSettle();
+        expect(lastCaptureCall(), 'disableCaptureProtection');
+      },
+    );
+
+    testWidgets('a page added at the bottom does not apply its policy', (
+      tester,
+    ) async {
+      final observer = SecureScreenPrivacyNavigatorObserver(
+        policies: {'/pay': const SecureRouteConfig(captureProtection: true)},
+      );
+      await tester.pumpWidget(pages(observer, ['/pay']));
+      await tester.pumpAndSettle();
+      fakePlatform.calls.clear();
+
+      await tester.pumpWidget(pages(observer, ['/home', '/pay']));
+      await tester.pumpAndSettle();
+      expect(fakePlatform.calls, isEmpty);
+
+      // The new bottom page is tracked in the right place: popping the top
+      // shows it.
+      await tester.pumpWidget(pages(observer, ['/home']));
+      await tester.pumpAndSettle();
+      expect(lastCaptureCall(), 'disableCaptureProtection');
+    });
+
+    testWidgets('starting with several pages applies the top one', (
+      tester,
+    ) async {
+      final observer = SecureScreenPrivacyNavigatorObserver(
+        policies: {
+          '/home': const SecureRouteConfig(),
+          '/pay': const SecureRouteConfig(captureProtection: true),
+        },
+      );
+      await tester.pumpWidget(pages(observer, ['/home', '/pay']));
+      await tester.pumpAndSettle();
+
+      expect(fakePlatform.calls, [
+        'enableCaptureProtection',
+        'disableAppSwitcherProtection',
+      ]);
+    });
+  });
+}
+
+/// A [Page] for Navigator.pages that builds a plain [PageRoute].
+class _FakePage extends Page<void> {
+  _FakePage(String name) : super(key: ValueKey(name), name: name);
+
+  @override
+  Route<void> createRoute(BuildContext context) => PageRouteBuilder<void>(
+    settings: this,
+    pageBuilder: (_, _, _) => const SizedBox(),
+  );
 }
