@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'secure_screen_privacy'
-  s.version          = '0.0.1'
+  s.version          = '1.0.0'
   s.summary          = 'Capture protection and app switcher/recents privacy overlays.'
   s.description      = <<-DESC
 Flutter plugin for capture protection (block screenshots/recording) and app
