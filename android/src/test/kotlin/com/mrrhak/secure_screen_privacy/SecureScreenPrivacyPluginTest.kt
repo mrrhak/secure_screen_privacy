@@ -559,4 +559,14 @@ internal class SecureScreenPrivacyPluginTest {
     fun appSwitcherCardColor_noThemeColor_meansNoOverride() {
         assertEquals(0, appSwitcherCardColor("blur", null, null, 0))
     }
+
+    @Test
+    fun isOnScreenImportance_onlyWhenAnActivityIsInFrontOrVisible() {
+        assertTrue(isOnScreenImportance(100)) // IMPORTANCE_FOREGROUND
+        assertTrue(isOnScreenImportance(200)) // IMPORTANCE_VISIBLE
+        assertFalse(isOnScreenImportance(125)) // IMPORTANCE_FOREGROUND_SERVICE
+        assertFalse(isOnScreenImportance(325)) // IMPORTANCE_TOP_SLEEPING (screen off)
+        assertFalse(isOnScreenImportance(400)) // IMPORTANCE_CACHED
+        assertFalse(isOnScreenImportance(1000)) // IMPORTANCE_GONE
+    }
 }

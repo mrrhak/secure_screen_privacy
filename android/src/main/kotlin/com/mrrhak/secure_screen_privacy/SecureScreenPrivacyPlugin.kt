@@ -87,6 +87,17 @@ class SecureScreenPrivacyPlugin :
     // onCancel).
     private var screenshotObserverThread: HandlerThread? = null
 
+    // Below API 34 the MediaStore observer only runs while this plugin's
+    // Activity is started (on screen), like the API 34+ callback and iOS.
+    // Before, it ran while the app was in the background too, so a
+    // screenshot of another app (or any new image) was reported as one of
+    // this app. Filtering on delivery wasn't enough: Android freezes a
+    // cached app and hands it the queued changes when it comes back to the
+    // front, so they arrived looking like on-screen screenshots. Volatile:
+    // also read on screenshotObserverThread.
+    @Volatile private var isActivityStarted = false
+    private var activityVisibilityCallbacks: Application.ActivityLifecycleCallbacks? = null
+
     // Screen recording event stream. Unlike the screenshot ContentObserver
     // above, both Android detection APIs are Activity-scoped
     // (act.windowManager / act.mainExecutor need a live Activity), so this
@@ -180,8 +191,82 @@ class SecureScreenPrivacyPlugin :
         isScreenshotListening = true
         when (screenshotDetectionPathForSdkInt(Build.VERSION.SDK_INT)) {
             ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK -> registerScreenshotCaptureCallbackIfNeeded()
-            ScreenshotDetectionPath.MEDIA_STORE_OBSERVER -> registerScreenshotObserver()
+            ScreenshotDetectionPath.MEDIA_STORE_OBSERVER -> updateScreenshotObserver()
         }
+    }
+
+    // Starts the MediaStore observer while subscribed and on screen, and
+    // stops it otherwise. Only used below API 34.
+    private fun updateScreenshotObserver() {
+        if (screenshotDetectionPathForSdkInt(Build.VERSION.SDK_INT) !=
+            ScreenshotDetectionPath.MEDIA_STORE_OBSERVER
+        ) return
+        if (isScreenshotListening && isActivityStarted) {
+            registerScreenshotObserver()
+        } else {
+            unregisterScreenshotObserver()
+        }
+    }
+
+    // Tracks whether this plugin's Activity is started. Registered on the
+    // Application (works on every API level) and filtered to that Activity.
+    private fun registerActivityVisibilityCallbacks(act: Activity) {
+        unregisterActivityVisibilityCallbacks(act)
+        val callbacks = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityStarted(a: Activity) {
+                if (a !== activity) return
+                isActivityStarted = true
+                updateScreenshotObserver()
+            }
+
+            override fun onActivityStopped(a: Activity) {
+                if (a !== activity) return
+                isActivityStarted = false
+                updateScreenshotObserver()
+            }
+
+            override fun onActivityCreated(a: Activity, b: Bundle?) {}
+            override fun onActivityResumed(a: Activity) {}
+            override fun onActivityPaused(a: Activity) {}
+            override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
+            override fun onActivityDestroyed(a: Activity) {}
+        }
+        val app = act.application ?: return
+        app.registerActivityLifecycleCallbacks(callbacks)
+        activityVisibilityCallbacks = callbacks
+    }
+
+    private fun unregisterActivityVisibilityCallbacks(act: Activity?) {
+        activityVisibilityCallbacks?.let { act?.application?.unregisterActivityLifecycleCallbacks(it) }
+        activityVisibilityCallbacks = null
+    }
+
+    // An Activity attached after it already started (rarely, e.g. an engine
+    // attached late) gets no onActivityStarted, so its start state is taken
+    // from the process: on screen when an Activity is in front or visible.
+    // Normally the plugin attaches during onCreate and the callback follows.
+    private fun isProcessOnScreen(): Boolean =
+        try {
+            val info = ActivityManager.RunningAppProcessInfo()
+            ActivityManager.getMyMemoryState(info)
+            isOnScreenImportance(info.importance)
+        } catch (e: RuntimeException) {
+            false
+        }
+
+    private fun attachActivityVisibility(act: Activity) {
+        if (screenshotDetectionPathForSdkInt(Build.VERSION.SDK_INT) !=
+            ScreenshotDetectionPath.MEDIA_STORE_OBSERVER
+        ) return
+        isActivityStarted = isProcessOnScreen()
+        registerActivityVisibilityCallbacks(act)
+        updateScreenshotObserver()
+    }
+
+    private fun detachActivityVisibility() {
+        unregisterActivityVisibilityCallbacks(activity)
+        isActivityStarted = false
+        updateScreenshotObserver()
     }
 
     override fun onCancel(arguments: Any?) {
@@ -302,6 +387,10 @@ class SecureScreenPrivacyPlugin :
             // through with nulls; shouldEmitScreenshotEvent() fails open in
             // that case.
         }
+
+        // A change queued just before the observer was stopped can still
+        // run here; drop it, before the deduper so it doesn't open its window.
+        if (!isActivityStarted) return
 
         val now = System.currentTimeMillis()
         // One screenshot produces several MediaStore notifications (Android
@@ -588,6 +677,7 @@ class SecureScreenPrivacyPlugin :
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        attachActivityVisibility(binding.activity)
         reapplyFlagSecureIfNeeded()
         registerTaskColorCallbacks(binding.activity)
         updateTaskBackgroundColor()
@@ -599,11 +689,13 @@ class SecureScreenPrivacyPlugin :
         unregisterScreenshotCaptureCallback() // must run before activity = null below
         unregisterScreenRecordingCallbacks() // must run before activity = null below
         unregisterTaskColorCallbacks(activity)
+        detachActivityVisibility() // must run before activity = null below
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
+        attachActivityVisibility(binding.activity)
         reapplyFlagSecureIfNeeded()
         registerTaskColorCallbacks(binding.activity)
         updateTaskBackgroundColor()
@@ -615,6 +707,7 @@ class SecureScreenPrivacyPlugin :
         unregisterScreenshotCaptureCallback() // must run before activity = null below
         unregisterScreenRecordingCallbacks() // must run before activity = null below
         unregisterTaskColorCallbacks(activity)
+        detachActivityVisibility() // must run before activity = null below
         activity = null
     }
 
@@ -670,6 +763,15 @@ internal fun shouldEmitScreenshotEvent(
     // determine, fail open.
     return true
 }
+
+// Whether a process importance (ActivityManager.RunningAppProcessInfo)
+// means the app is on screen: FOREGROUND (an Activity in front) or VISIBLE
+// (an Activity visible but not in front, e.g. in split screen). A foreground
+// service alone (FOREGROUND_SERVICE), a cached app and a screen that is off
+// (TOP_SLEEPING) are not. The constants are compile-time ints, inlined.
+internal fun isOnScreenImportance(importance: Int): Boolean =
+    importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND ||
+        importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
 
 // Which Android screenshot detection mechanism to use at a given SDK level.
 // Pure (same reasoning as shouldEmitScreenshotEvent) so it's unit-testable.

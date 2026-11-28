@@ -360,9 +360,9 @@ You get the current state as soon as you listen, then each change.
 - iOS: only screenshots taken while your app is on screen are reported,
   also when it's visible but not in front (behind Control Center, or in
   iPad Split View).
-- On Android 13 and older, screenshots are reported while your app runs in
-  the background too. Check that your app is in the foreground if you need
-  to.
+- On Android 13 and older, only screenshots taken while your app is on
+  screen are reported, like on Android 14 and iOS. Detection pauses while
+  your app is in the background.
 
 **Screen recording events**
 
