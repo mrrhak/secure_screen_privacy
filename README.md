@@ -263,12 +263,25 @@ You get the current state as soon as you listen, then each change.
 
 | Feature | Android | iOS |
 | --- | --- | --- |
-| Block screenshots and recording | ✅ 7.0+ | ✅ 13+ |
-| App Switcher blur, image | Plain card instead | ✅ |
-| App Switcher color | ✅ 13+ (card color) | ✅ |
+| Block screenshots | ✅ | ✅ |
+| Block screen recording | ✅ | ✅ |
+| App Switcher: hide content | ✅ | ✅ |
+| App Switcher: `blur` | ❌ plain card | ✅ |
+| App Switcher: `blurIntensity` | ❌ | ✅ |
+| App Switcher: `color` | ✅ Android 13+ (card color) | ✅ |
+| App Switcher: `image` | ❌ card in `imageBackgroundColor` | ✅ |
+| App Switcher: `imageBlur` | ❌ plain card | ✅ |
+| Card follows dark/light mode | ✅ Android 13+ | — |
 | Per-route protection | ✅ | ✅ |
+| Dialog and bottom sheet protection | ✅ | ✅ |
+| go_router and auto_route | ✅ | ✅ |
 | Screenshot events | ✅ | ✅ |
-| Screen recording events | ✅ 15+ | ✅ |
+| Screenshot events of your app only | ✅ Android 14+ | ❌ |
+| Screen recording start and stop events | ✅ Android 15+ | ✅ |
+| Multi-window (each window protected on its own) | — | ✅ iPad |
+| Minimum version | Android 7.0 (API 24) | iOS 13 |
+
+✅ supported · ❌ not supported · — not applicable
 
 ## 📝 Notes
 
