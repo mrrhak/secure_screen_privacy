@@ -162,7 +162,9 @@ Route<dynamic> _fakePopupRoute({String? name}) {
 }
 
 class _FakePopupRoute extends PopupRoute<void> {
-  _FakePopupRoute({super.settings});
+  _FakePopupRoute({super.settings, this.child = const SizedBox()});
+
+  final Widget child;
 
   @override
   Color? get barrierColor => null;
@@ -181,7 +183,7 @@ class _FakePopupRoute extends PopupRoute<void> {
     BuildContext context,
     Animation<double> animation,
     Animation<double> secondaryAnimation,
-  ) => const SizedBox();
+  ) => child;
 }
 
 /// A root Navigator showing [rootPage], whose page holds a nested Navigator
@@ -255,6 +257,44 @@ void main() {
       expect(a, isNot(equals(c)));
     });
 
+    test('each field takes part in equality', () {
+      const base = SecureRouteConfig(
+        captureProtection: true,
+        appSwitcherMode: AppSwitcherProtectionMode.blur,
+      );
+
+      expect(
+        base,
+        isNot(
+          const SecureRouteConfig(
+            captureProtection: true,
+            appSwitcherMode: AppSwitcherProtectionMode.blur,
+            blurIntensity: BlurIntensity.heavy,
+          ),
+        ),
+      );
+      expect(
+        base,
+        isNot(
+          const SecureRouteConfig(
+            captureProtection: true,
+            appSwitcherMode: AppSwitcherProtectionMode.blur,
+            color: 0xFF2196F3,
+          ),
+        ),
+      );
+      expect(
+        base,
+        isNot(
+          const SecureRouteConfig(
+            captureProtection: true,
+            appSwitcherMode: AppSwitcherProtectionMode.blur,
+            imageBackgroundColor: 0xFFFFFFFF,
+          ),
+        ),
+      );
+    });
+
     test('hashCode', () {
       const a = SecureRouteConfig(
         captureProtection: true,
@@ -282,6 +322,37 @@ void main() {
         'SecureRouteConfig(captureProtection: true, appSwitcherMode: color, '
         'blurIntensity: ultraLight, color: 0xFF2196F3, '
         'imageBackgroundColor: 0xFF000000)',
+      );
+    });
+  });
+
+  group('event equality', () {
+    final time = DateTime.utc(2026, 11, 27, 10);
+    final later = DateTime.utc(2026, 11, 27, 11);
+
+    test('ScreenshotEvent', () {
+      expect(ScreenshotEvent(time), ScreenshotEvent(time));
+      expect(ScreenshotEvent(time).hashCode, ScreenshotEvent(time).hashCode);
+      expect(ScreenshotEvent(time), isNot(ScreenshotEvent(later)));
+    });
+
+    test('ScreenRecordingEvent', () {
+      const recording = ScreenRecordingState.recording;
+      expect(
+        ScreenRecordingEvent(recording, time),
+        ScreenRecordingEvent(recording, time),
+      );
+      expect(
+        ScreenRecordingEvent(recording, time).hashCode,
+        ScreenRecordingEvent(recording, time).hashCode,
+      );
+      expect(
+        ScreenRecordingEvent(recording, time),
+        isNot(ScreenRecordingEvent(ScreenRecordingState.notRecording, time)),
+      );
+      expect(
+        ScreenRecordingEvent(recording, time),
+        isNot(ScreenRecordingEvent(recording, later)),
       );
     });
   });
@@ -978,6 +1049,38 @@ void main() {
     );
   });
 
+  testWidgets(
+    'nested navigator inside a popup with no page on the parent is showing',
+    (tester) async {
+      final rootObserver = SecureScreenPrivacyNavigatorObserver();
+      final nestedObserver = SecureScreenPrivacyNavigatorObserver(
+        policies: {
+          '/payment': const SecureRouteConfig(captureProtection: true),
+        },
+      );
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Navigator(
+            observers: [rootObserver],
+            onGenerateRoute: (_) => _FakePopupRoute(
+              child: Navigator(
+                observers: [nestedObserver],
+                onGenerateRoute: (_) => _fakeRoute('/payment'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fakePlatform.calls, [
+        'enableCaptureProtection',
+        'disableAppSwitcherProtection',
+      ]);
+    },
+  );
+
   group('removing and replacing routes', () {
     Future<NavigatorState> pumpNavigator(
       WidgetTester tester,
@@ -1185,6 +1288,44 @@ void main() {
       expect(lastCaptureCall(), 'disableCaptureProtection');
     });
 
+    testWidgets(
+      'a page added above an unknown popup page while only popups show does not apply its policy',
+      (tester) async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/pay': const SecureRouteConfig(captureProtection: true),
+            '/secret': const SecureRouteConfig(captureProtection: true),
+          },
+        );
+        Widget popupPages(List<Page<void>> list) => Directionality(
+          textDirection: TextDirection.ltr,
+          child: Navigator(
+            observers: [observer],
+            pages: list,
+            onDidRemovePage: (_) {},
+          ),
+        );
+        final first = _FakePopupPage('first');
+        final last = _FakePopupPage('last');
+        await tester.pumpWidget(popupPages([first, last]));
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls, isEmpty);
+
+        // /pay goes under the top popup, right above a popup the observer
+        // doesn't track: what shows is unchanged.
+        await tester.pumpWidget(popupPages([first, _FakePage('/pay'), last]));
+        await tester.pumpAndSettle();
+        expect(fakePlatform.calls, isEmpty);
+
+        // A page pushed on top still applies its own policy.
+        await tester.pumpWidget(
+          popupPages([first, _FakePage('/pay'), last, _FakePage('/secret')]),
+        );
+        await tester.pumpAndSettle();
+        expect(lastCaptureCall(), 'enableCaptureProtection');
+      },
+    );
+
     testWidgets('starting with several pages applies the top one', (
       tester,
     ) async {
@@ -1214,4 +1355,13 @@ class _FakePage extends Page<void> {
     settings: this,
     pageBuilder: (_, _, _) => const SizedBox(),
   );
+}
+
+/// A [Page] for Navigator.pages that builds an untracked popup route.
+class _FakePopupPage extends Page<void> {
+  _FakePopupPage(String name) : super(key: ValueKey(name), name: name);
+
+  @override
+  Route<void> createRoute(BuildContext context) =>
+      _FakePopupRoute(settings: this);
 }

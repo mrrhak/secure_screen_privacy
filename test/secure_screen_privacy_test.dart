@@ -151,4 +151,27 @@ void main() {
       isA<ScreenRecordingEvent>(),
     );
   });
+
+  group('a platform that overrides nothing', () {
+    final platform = _EmptyPlatform();
+
+    test('throws UnimplementedError for every method', () {
+      expect(platform.getPlatformVersion, throwsUnimplementedError);
+      expect(platform.enableCaptureProtection, throwsUnimplementedError);
+      expect(platform.disableCaptureProtection, throwsUnimplementedError);
+      expect(platform.isCaptureProtectionEnabled, throwsUnimplementedError);
+      expect(
+        () => platform.enableAppSwitcherProtection(
+          AppSwitcherProtectionMode.blur,
+        ),
+        throwsUnimplementedError,
+      );
+      expect(platform.disableAppSwitcherProtection, throwsUnimplementedError);
+      expect(platform.isAppSwitcherProtectionEnabled, throwsUnimplementedError);
+      expect(() => platform.screenshotEvents, throwsUnimplementedError);
+      expect(() => platform.screenRecordingEvents, throwsUnimplementedError);
+    });
+  });
 }
+
+class _EmptyPlatform extends SecureScreenPrivacyPlatform {}
