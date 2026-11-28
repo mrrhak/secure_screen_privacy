@@ -110,8 +110,8 @@
 
 <p align="center">
   <sub>Pick one with <code>enableAppSwitcherProtection(AppSwitcherProtectionMode.…)</code>.
-  On Android the App Switcher shows a plain card in your color. See
-  <a href="#hide-the-app-in-the-app-switcher">Hide the app in the App Switcher</a>.</sub>
+  On Android the App Switcher shows a plain card instead. See
+  <a href="#app-switcher-modes-on-ios-and-android">App Switcher modes on iOS and Android</a>.</sub>
 </p>
 
 ---
@@ -139,6 +139,48 @@
 - A stream of screenshot events
 - A stream of screen recording and mirroring start and stop events
 - Works with iPad multi-window: each window protects itself
+
+## 📱 Platform support
+
+| Feature | Android | iOS |
+| --- | --- | --- |
+| Block screenshots | ✅ | ✅ |
+| Block screen recording | ✅ | ✅ |
+| App Switcher: hide content | ✅ | ✅ |
+| App Switcher: blur and image | ❌ plain card ([details](#app-switcher-modes-on-ios-and-android)) | ✅ |
+| App Switcher: card color | ✅ Android 13+ | — |
+| Per-route protection | ✅ | ✅ |
+| Dialog and bottom sheet protection | ✅ | ✅ |
+| go_router and auto_route | ✅ | ✅ |
+| Screenshot events | ✅ | ✅ |
+| Screenshot events of your app only | ✅ Android 14+ | ✅ |
+| Screen recording start and stop events | ✅ Android 15+ | ✅ |
+| Multi-window (each window protected on its own) | — | ✅ iPad |
+| Minimum version | Android 7.0 (API 24) | iOS 15 |
+
+✅ supported · ❌ not supported · — not applicable
+
+Only Android and iOS are supported. On web, Windows, macOS and Linux every
+method throws a `PlatformException` with code `channel-error`, and the event
+streams send no events (Flutter reports the failed subscription as a
+`MissingPluginException` through `FlutterError`). If your app also runs there,
+call the plugin only on Android and iOS (for example, check
+`defaultTargetPlatform` and `kIsWeb` first).
+
+### App Switcher modes on iOS and Android
+
+| Mode | iOS shows | Android shows |
+| --- | --- | --- |
+| `blur` | a blur of the screen (`blurIntensity` sets how strong) | no blur: a plain card in your theme's background color |
+| `color` | a solid `color` | a plain card in `color` |
+| `image` | your image on `imageBackgroundColor` | no image: a plain card in `imageBackgroundColor` |
+| `imageBlur` | your image over a blur of the screen | no image or blur: a plain card in your theme's background color |
+
+On Android every mode works the same way: it turns on `FLAG_SECURE`, so
+while App Switcher protection is on, screenshots and recordings of the app
+are blank too. The card color needs Android 13 or newer; on Android 12 and
+older every mode shows a plain card in your theme's background color.
+`blurIntensity` is ignored on Android.
 
 ## 📦 Installation
 
@@ -191,12 +233,8 @@ await privacy.disableAppSwitcherProtection();
 final isOn = await privacy.isAppSwitcherProtectionEnabled();
 ```
 
-| Mode | iOS shows | Android shows |
-| --- | --- | --- |
-| `blur` | a blur of the screen | a card in your theme's background color |
-| `color` | `color` | a card in `color` |
-| `image` | your image on `imageBackgroundColor` | a card in `imageBackgroundColor` |
-| `imageBlur` | your image over a blur | a card in your theme's background color |
+What each mode shows on iOS and Android is in
+[App Switcher modes on iOS and Android](#app-switcher-modes-on-ios-and-android).
 
 `blurIntensity` is `ultraLight` (default), `light`, `medium` or `heavy`.
 
@@ -204,8 +242,6 @@ final isOn = await privacy.isAppSwitcherProtectionEnabled();
 iOS app's `Assets.xcassets`. It's shown at its own aspect ratio, never
 cropped, with `imageBackgroundColor` filling the rest. Android needs no
 image.
-
-<img src="https://raw.githubusercontent.com/mrrhak/secure_screen_privacy/master/doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain teal card for the protected app in color mode">
 
 ### Protect only some screens
 
@@ -304,37 +340,6 @@ final subscription = privacy.screenRecordingEvents.listen((event) {
 
 You get the current state as soon as you listen, then each change.
 
-## 📱 Platform support
-
-| Feature | Android | iOS |
-| --- | --- | --- |
-| Block screenshots | ✅ | ✅ |
-| Block screen recording | ✅ | ✅ |
-| App Switcher: hide content | ✅ | ✅ |
-| App Switcher: `blur` | ❌ plain card | ✅ |
-| App Switcher: `blurIntensity` | ❌ | ✅ |
-| App Switcher: `color` | ✅ Android 13+ (card color) | ✅ |
-| App Switcher: `image` | ❌ card in `imageBackgroundColor` | ✅ |
-| App Switcher: `imageBlur` | ❌ plain card | ✅ |
-| Card follows dark/light mode | ✅ Android 13+ | — |
-| Per-route protection | ✅ | ✅ |
-| Dialog and bottom sheet protection | ✅ | ✅ |
-| go_router and auto_route | ✅ | ✅ |
-| Screenshot events | ✅ | ✅ |
-| Screenshot events of your app only | ✅ Android 14+ | ✅ |
-| Screen recording start and stop events | ✅ Android 15+ | ✅ |
-| Multi-window (each window protected on its own) | — | ✅ iPad |
-| Minimum version | Android 7.0 (API 24) | iOS 15 |
-
-✅ supported · ❌ not supported · — not applicable
-
-Only Android and iOS are supported. On web, Windows, macOS and Linux every
-method throws a `PlatformException` with code `channel-error`, and the event
-streams send no events (Flutter reports the failed subscription as a
-`MissingPluginException` through `FlutterError`). If your app also runs there,
-call the plugin only on Android and iOS (for example, check
-`defaultTargetPlatform` and `kIsWeb` first).
-
 ## 📝 Notes
 
 <details>
@@ -367,12 +372,10 @@ call the plugin only on Android and iOS (for example, check
 
 **App Switcher on Android**
 
-- Android can't draw a blur or an image in the App Switcher. Protection uses
-  `FLAG_SECURE`, which hides your content and shows a plain card.
-- On Android 13 and newer the card's color follows the table above, and
-  changes right away when the device switches between dark and light mode.
-  On Android 12 and older it uses your theme's background color from when
-  the app started.
+- On Android 13 and newer the card's color follows the
+  [mode table](#app-switcher-modes-on-ios-and-android), and changes right away when the device switches between
+  dark and light mode. On Android 12 and older it uses your theme's
+  background color from when the app started.
 - The card color is set with `setTaskDescription`. The label and colors
   Flutter sets there are kept, but a custom task icon isn't while protection
   is on.
@@ -428,31 +431,6 @@ call the plugin only on Android and iOS (for example, check
 - On iOS, mirroring the screen (AirPlay) counts as recording.
 
 </details>
-
-## 🔁 Migrating to 0.1.0
-
-0.1.0 moves the plugin onto [Pigeon](https://pub.dev/packages/pigeon), as in
-Flutter's current plugin template. `SecureScreenPrivacy`, the navigator
-observer, the events and the enums are unchanged, so most apps only need the
-iOS minimum. The breaking changes:
-
-- **iOS 15 or newer.** Before: iOS 13. After: iOS 15. Set
-  `platform :ios, '15.0'` in `ios/Podfile` and the deployment target in Xcode
-  to 15.0 or higher.
-- **Default implementation renamed.** Before:
-  `MethodChannelSecureScreenPrivacy()` from
-  `secure_screen_privacy_method_channel.dart`. After:
-  `PigeonSecureScreenPrivacy()` from `secure_screen_privacy_pigeon.dart`.
-  Only code that used the class directly needs the new name.
-- **Test hooks.** Before: mocking `MethodChannel('secure_screen_privacy')`, or
-  the `methodChannel`, `screenshotEventChannel` and
-  `screenRecordingEventChannel` fields. After: the channels have new internal
-  names, so those mocks no longer take effect. In tests, replace the whole
-  implementation instead: `SecureScreenPrivacyPlatform.instance = FakePlatform();`
-  with a class that extends `SecureScreenPrivacyPlatform`.
-- **Unsupported platforms.** Before: methods threw `MissingPluginException`.
-  After: they throw `PlatformException` with code `channel-error`. Catch
-  `PlatformException`, or check the platform first.
 
 ## 🐞 Bugs or Requests
 
