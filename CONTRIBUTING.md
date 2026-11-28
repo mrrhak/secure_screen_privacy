@@ -61,9 +61,8 @@ Tests:
 3. **How can we reproduce it?** Fork this repository and make the smallest
    change to the example app that shows the bug. Skip this if you fix the bug
    yourself, or if the example already shows it.
-4. **Submit a report!** Open a new issue with the platform and OS version, the
-   device or simulator, your Flutter version, the steps to reproduce, and
-   what you expected to happen.
+4. **Submit a report!** Open a new issue with the "Bug report" template and
+   fill in every section, keeping its format.
 
 Things to AVOID:
 
@@ -74,8 +73,8 @@ Things to AVOID:
 
 ## Suggesting an improvement
 
-Open a new issue that describes the improvement and why it helps. Search the
-existing issues first to avoid a duplicate.
+Open a new issue with the "Feature request" template and fill in every
+section. Search the existing issues first to avoid a duplicate.
 
 ## Making a pull request
 
@@ -93,7 +92,8 @@ To create a pull request:
    in `CHANGELOG.md`.
 5. Run the checks below.
 6. Create the pull request via [GitHub's instructions](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork),
-   with a title like `fix: ...` or `feat: ...` (CI checks it).
+   with a title like `fix: ...` or `feat: ...` (CI checks it), and fill in
+   the pull request template.
 7. [Link](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)
    that pull request with the original issue.
 
