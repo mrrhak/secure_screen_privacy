@@ -4,8 +4,7 @@
 
 Moves the plugin onto [Pigeon](https://pub.dev/packages/pigeon), as in the
 Flutter 3.50.1 plugin template. Protection, detection and the public
-`SecureScreenPrivacy` API work as before. See "Migrating to 0.1.0" in the
-README.
+`SecureScreenPrivacy` API work as before.
 
 ### Breaking changes
 
