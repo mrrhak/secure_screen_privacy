@@ -205,8 +205,6 @@ iOS app's `Assets.xcassets`. It's shown at its own aspect ratio, never
 cropped, with `imageBackgroundColor` filling the rest. Android needs no
 image.
 
-<img src="https://raw.githubusercontent.com/mrrhak/secure_screen_privacy/master/doc/images/android_app_switcher.png" width="240" alt="Android App Switcher showing a plain teal card for the protected app in color mode">
-
 ### Protect only some screens
 
 Add `SecureScreenPrivacyNavigatorObserver` and give each sensitive route a
