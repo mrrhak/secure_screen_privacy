@@ -136,4 +136,4 @@ jobs:
           flutter pub get --no-example
 
       - name: Test
-        run: flutter test
+        run: flutter test --no-pub
