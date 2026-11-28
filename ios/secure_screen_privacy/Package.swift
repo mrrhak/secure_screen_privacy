@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "secure_screen_privacy",
     platforms: [
-        .iOS("13.0")
+        .iOS("15.0")
     ],
     products: [
         .library(name: "secure-screen-privacy", targets: ["secure_screen_privacy"])

@@ -11,17 +11,27 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
-  func testGetPlatformVersion() {
+  func testGetPlatformVersion() throws {
     let plugin = SecureScreenPrivacyPlugin()
 
-    let call = FlutterMethodCall(methodName: "getPlatformVersion", arguments: [])
+    XCTAssertEqual(try plugin.getPlatformVersion(), "iOS " + UIDevice.current.systemVersion)
+  }
 
-    let resultExpectation = expectation(description: "result block must be called.")
-    plugin.handle(call) { result in
-      XCTAssertEqual(result as! String, "iOS " + UIDevice.current.systemVersion)
-      resultExpectation.fulfill()
+  func testEnableAppSwitcherProtection_withAllModes_isEnabled() throws {
+    for mode in AppSwitcherModeMessage.allCases {
+      let plugin = SecureScreenPrivacyPlugin()
+      XCTAssertTrue(try plugin.enableAppSwitcherProtection(options: options(mode)))
+      XCTAssertTrue(try plugin.isAppSwitcherProtectionEnabled())
+      XCTAssertTrue(try plugin.disableAppSwitcherProtection())
+      XCTAssertFalse(try plugin.isAppSwitcherProtectionEnabled())
     }
-    waitForExpectations(timeout: 1)
+  }
+
+  func testModeAndBlurIntensityNames_matchTheDartNames() {
+    XCTAssertEqual(AppSwitcherModeMessage.allCases.map(SecureScreenPrivacyPlugin.modeName),
+                   ["blur", "image", "color", "imageBlur"])
+    XCTAssertEqual(BlurIntensityMessage.allCases.map(SecureScreenPrivacyPlugin.blurIntensityName),
+                   ["ultraLight", "light", "medium", "heavy"])
   }
 
   // MARK: - App switcher overlay follows the resigning scene
@@ -52,15 +62,18 @@ class RunnerTests: XCTestCase {
     return window
   }
 
-  private func call(_ plugin: SecureScreenPrivacyPlugin, _ method: String, _ args: Any? = nil) {
-    plugin.handle(FlutterMethodCall(methodName: method, arguments: args)) { _ in }
+  private func options(
+    _ mode: AppSwitcherModeMessage, color: Int64 = 0xFF000000, imageBackgroundColor: Int64 = 0xFF000000
+  ) -> AppSwitcherOptionsMessage {
+    AppSwitcherOptionsMessage(
+      mode: mode, blurIntensity: .ultraLight, color: color, imageBackgroundColor: imageBackgroundColor)
   }
 
   func testSceneWillResignActive_coversThatScenesWindow_andDidBecomeActiveUncoversIt() throws {
     let scene = try hostScene()
     let window = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
-    call(plugin, "enableAppSwitcherProtection", ["mode": "color", "color": 0xFF000000])
+    _ = try? plugin.enableAppSwitcherProtection(options: options(.color))
 
     plugin.sceneWillResignActive(scene)
 
@@ -79,7 +92,7 @@ class RunnerTests: XCTestCase {
     _ = try hostScene()
     let plugin = SecureScreenPrivacyPlugin()
 
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableCaptureProtection()
 
     XCTAssertFalse(plugin.isWindowAttachedToSecureField)
   }
@@ -88,7 +101,7 @@ class RunnerTests: XCTestCase {
     let scene = try hostScene()
     let plugin = SecureScreenPrivacyPlugin()
 
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableCaptureProtection()
     plugin.sceneDidBecomeActive(scene)
 
     XCTAssertFalse(plugin.isWindowAttachedToSecureField)
@@ -131,7 +144,7 @@ class RunnerTests: XCTestCase {
     let plugin = SecureScreenPrivacyPlugin()
     plugin.ownWindowProvider = { own }
 
-    call(plugin, "enableCaptureProtection")
+    _ = try? plugin.enableCaptureProtection()
 
     XCTAssertTrue(plugin.isProtecting(own))
     XCTAssertFalse(plugin.isProtecting(active))
@@ -140,7 +153,7 @@ class RunnerTests: XCTestCase {
     plugin.sceneDidBecomeActive(try hostScene())
     XCTAssertTrue(plugin.isProtecting(own))
     XCTAssertFalse(plugin.isProtecting(active))
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableCaptureProtection()
   }
 
   func testEnableCaptureProtection_withoutOwnWindow_fallsBackToActiveWindow() throws {
@@ -148,11 +161,11 @@ class RunnerTests: XCTestCase {
     let plugin = SecureScreenPrivacyPlugin()
     plugin.ownWindowProvider = { nil }
 
-    call(plugin, "enableCaptureProtection")
+    _ = try? plugin.enableCaptureProtection()
 
     XCTAssertTrue(plugin.isProtecting(active))
     XCTAssertFalse(plugin.isProtecting(own))
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableCaptureProtection()
   }
 
   func testOwnWindowAppearingLater_movesProtectionToIt() throws {
@@ -160,7 +173,7 @@ class RunnerTests: XCTestCase {
     let plugin = SecureScreenPrivacyPlugin()
     var ownWindow: UIWindow? = nil
     plugin.ownWindowProvider = { ownWindow }
-    call(plugin, "enableCaptureProtection")
+    _ = try? plugin.enableCaptureProtection()
     XCTAssertTrue(plugin.isProtecting(active))
 
     ownWindow = own
@@ -168,7 +181,7 @@ class RunnerTests: XCTestCase {
 
     XCTAssertTrue(plugin.isProtecting(own))
     XCTAssertFalse(plugin.isProtecting(active))
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableCaptureProtection()
   }
 
   // MARK: - Background snapshot with capture protection only
@@ -181,7 +194,7 @@ class RunnerTests: XCTestCase {
     let window = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
     plugin.ownWindowProvider = { window }
-    call(plugin, "enableCaptureProtection")
+    _ = try? plugin.enableCaptureProtection()
     XCTAssertTrue(plugin.isProtecting(window))
 
     plugin.sceneDidEnterBackground(scene)
@@ -189,7 +202,7 @@ class RunnerTests: XCTestCase {
 
     plugin.sceneWillEnterForeground(scene)
     XCTAssertTrue(plugin.isProtecting(window))
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableCaptureProtection()
   }
 
   func testCaptureProtectionOnly_appDelegateVariants_switchItOffAndOn() throws {
@@ -197,14 +210,14 @@ class RunnerTests: XCTestCase {
     let window = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
     plugin.ownWindowProvider = { window }
-    call(plugin, "enableCaptureProtection")
+    _ = try? plugin.enableCaptureProtection()
 
     plugin.applicationDidEnterBackground(UIApplication.shared)
     XCTAssertFalse(plugin.isProtecting(window))
 
     plugin.applicationWillEnterForeground(UIApplication.shared)
     XCTAssertTrue(plugin.isProtecting(window))
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableCaptureProtection()
   }
 
   // With app switcher protection on, the overlay handles the snapshot:
@@ -214,13 +227,13 @@ class RunnerTests: XCTestCase {
     let window = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
     plugin.ownWindowProvider = { window }
-    call(plugin, "enableCaptureProtection")
-    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+    _ = try? plugin.enableCaptureProtection()
+    _ = try? plugin.enableAppSwitcherProtection(options: options(.color))
 
     plugin.sceneDidEnterBackground(scene)
     XCTAssertTrue(plugin.isProtecting(window))
-    call(plugin, "disableAppSwitcherProtection")
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableAppSwitcherProtection()
+    _ = try? plugin.disableCaptureProtection()
   }
 
   // Still covered by the overlay on the way back: the field stays off until
@@ -230,8 +243,8 @@ class RunnerTests: XCTestCase {
     let window = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
     plugin.ownWindowProvider = { window }
-    call(plugin, "enableCaptureProtection")
-    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+    _ = try? plugin.enableCaptureProtection()
+    _ = try? plugin.enableAppSwitcherProtection(options: options(.color))
     plugin.sceneWillResignActive(scene)
     XCTAssertFalse(plugin.isProtecting(window))
 
@@ -241,8 +254,8 @@ class RunnerTests: XCTestCase {
 
     plugin.sceneDidBecomeActive(scene)
     XCTAssertTrue(plugin.isProtecting(window))
-    call(plugin, "disableAppSwitcherProtection")
-    call(plugin, "disableCaptureProtection")
+    _ = try? plugin.disableAppSwitcherProtection()
+    _ = try? plugin.disableCaptureProtection()
   }
 
   func testCaptureProtectionOff_backgroundAndForeground_neverMoveTheWindow() throws {
@@ -263,11 +276,8 @@ class RunnerTests: XCTestCase {
     let plugin = SecureScreenPrivacyPlugin()
     plugin.appSwitcherImageProvider = { nil }
 
-    var enabled: Any?
-    plugin.handle(FlutterMethodCall(
-      methodName: "enableAppSwitcherProtection",
-      arguments: ["mode": "image", "imageBackgroundColor": 0xFFFF0000])) { enabled = $0 }
-    XCTAssertEqual(enabled as? Bool, true)
+    XCTAssertTrue(try plugin.enableAppSwitcherProtection(
+      options: options(.image, imageBackgroundColor: 0xFFFF0000)))
 
     plugin.sceneWillResignActive(scene)
 
@@ -283,10 +293,7 @@ class RunnerTests: XCTestCase {
     let plugin = SecureScreenPrivacyPlugin()
     plugin.appSwitcherImageProvider = { nil }
 
-    var enabled: Any?
-    plugin.handle(FlutterMethodCall(
-      methodName: "enableAppSwitcherProtection", arguments: ["mode": "imageBlur"])) { enabled = $0 }
-    XCTAssertEqual(enabled as? Bool, true)
+    XCTAssertTrue(try plugin.enableAppSwitcherProtection(options: options(.imageBlur)))
 
     plugin.sceneWillResignActive(scene)
 
@@ -299,7 +306,7 @@ class RunnerTests: XCTestCase {
     let scene = try hostScene()
     let window = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
-    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+    _ = try? plugin.enableAppSwitcherProtection(options: options(.color))
 
     plugin.sceneWillResignActive(scene)
     plugin.applicationWillResignActive(UIApplication.shared)
@@ -323,10 +330,10 @@ class RunnerTests: XCTestCase {
     let scene = try hostScene()
     let window = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
-    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+    _ = try? plugin.enableAppSwitcherProtection(options: options(.color))
     plugin.sceneWillResignActive(scene)
 
-    call(plugin, "disableAppSwitcherProtection")
+    _ = try? plugin.disableAppSwitcherProtection()
 
     XCTAssertFalse(plugin.hasOverlay(on: window))
     XCTAssertEqual(window.rootViewController?.view.subviews.count, 0)
@@ -352,7 +359,7 @@ class RunnerTests: XCTestCase {
     window.rootViewController?.present(presented, animated: false)
     XCTAssertTrue(window.rootViewController?.presentedViewController === presented)
     let plugin = SecureScreenPrivacyPlugin()
-    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+    _ = try? plugin.enableAppSwitcherProtection(options: options(.color))
 
     plugin.sceneWillResignActive(scene)
 
@@ -433,30 +440,29 @@ class RunnerTests: XCTestCase {
   // for one screenshot and both reached Dart.
   func testDuplicateScreenshotNotifications_reachTheSinkOnce() {
     let plugin = SecureScreenPrivacyPlugin()
-    var events: [Any?] = []
-    _ = plugin.onListen(withArguments: nil) { events.append($0) }
-    defer { _ = plugin.onCancel(withArguments: nil) }
+    var events: [ScreenshotEventMessage] = []
+    plugin.handleScreenshotListen { events.append($0) }
+    defer { plugin.handleScreenshotCancel() }
 
     NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: UIApplication.shared)
     NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: UIApplication.shared)
     drainMainQueue()
 
     XCTAssertEqual(events.count, 1)
-    let payload = events.first as? [String: Any]
-    XCTAssertNotNil(payload?["timestamp"] as? Int64)
+    XCTAssertGreaterThan(events.first?.timestampMillis ?? 0, 0)
   }
 
   func testScreenshotAfterRelisten_isReportedEvenInsideTheWindow() {
     let plugin = SecureScreenPrivacyPlugin()
-    var events: [Any?] = []
-    _ = plugin.onListen(withArguments: nil) { events.append($0) }
+    var events: [ScreenshotEventMessage] = []
+    plugin.handleScreenshotListen { events.append($0) }
     plugin.handleScreenshotTaken()
     drainMainQueue()
-    _ = plugin.onCancel(withArguments: nil)
+    plugin.handleScreenshotCancel()
 
     // Subscribing again well inside the window must start fresh.
-    _ = plugin.onListen(withArguments: nil) { events.append($0) }
-    defer { _ = plugin.onCancel(withArguments: nil) }
+    plugin.handleScreenshotListen { events.append($0) }
+    defer { plugin.handleScreenshotCancel() }
     plugin.handleScreenshotTaken()
     drainMainQueue()
 
@@ -468,9 +474,9 @@ class RunnerTests: XCTestCase {
   func testScreenshotWhileInBackground_isNotReported() {
     let plugin = SecureScreenPrivacyPlugin()
     plugin.appOnScreenProvider = { false }
-    var events: [Any?] = []
-    _ = plugin.onListen(withArguments: nil) { events.append($0) }
-    defer { _ = plugin.onCancel(withArguments: nil) }
+    var events: [ScreenshotEventMessage] = []
+    plugin.handleScreenshotListen { events.append($0) }
+    defer { plugin.handleScreenshotCancel() }
 
     NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: UIApplication.shared)
     drainMainQueue()
@@ -484,9 +490,9 @@ class RunnerTests: XCTestCase {
     let plugin = SecureScreenPrivacyPlugin()
     var onScreen = false
     plugin.appOnScreenProvider = { onScreen }
-    var events: [Any?] = []
-    _ = plugin.onListen(withArguments: nil) { events.append($0) }
-    defer { _ = plugin.onCancel(withArguments: nil) }
+    var events: [ScreenshotEventMessage] = []
+    plugin.handleScreenshotListen { events.append($0) }
+    defer { plugin.handleScreenshotCancel() }
 
     plugin.handleScreenshotTaken()
     onScreen = true
@@ -540,16 +546,14 @@ class RunnerTests: XCTestCase {
     let own = makeVisibleWindow(in: scene)
     let plugin = SecureScreenPrivacyPlugin()
     plugin.ownWindowProvider = { own }
-    var events: [[String: Any]] = []
+    var events: [ScreenRecordingEventMessage] = []
 
-    plugin.handleRecordingListen { event in
-      if let event = event as? [String: Any] { events.append(event) }
-    }
+    plugin.handleRecordingListen { events.append($0) }
     drainMainQueue()
     plugin.handleRecordingCancel()
 
     XCTAssertEqual(events.count, 1)
-    XCTAssertEqual(events.first?["isRecording"] as? Bool, scene.screen.isCaptured)
+    XCTAssertEqual(events.first?.isRecording, scene.screen.isCaptured)
   }
 
   private func drainMainQueue() {

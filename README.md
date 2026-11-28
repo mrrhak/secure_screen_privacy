@@ -109,7 +109,7 @@
 flutter pub add secure_screen_privacy
 ```
 
-It requires Flutter 3.38 or newer, Android 7.0 (API 24) or newer and iOS 13
+It requires Flutter 3.38 or newer, Android 7.0 (API 24) or newer and iOS 15
 or newer.
 
 ```dart
@@ -287,14 +287,16 @@ You get the current state as soon as you listen, then each change.
 | Screenshot events of your app only | ✅ Android 14+ | ✅ |
 | Screen recording start and stop events | ✅ Android 15+ | ✅ |
 | Multi-window (each window protected on its own) | — | ✅ iPad |
-| Minimum version | Android 7.0 (API 24) | iOS 13 |
+| Minimum version | Android 7.0 (API 24) | iOS 15 |
 
 ✅ supported · ❌ not supported · — not applicable
 
 Only Android and iOS are supported. On web, Windows, macOS and Linux every
-method throws a `MissingPluginException`, and the event streams send it as an
-error. If your app also runs there, call the plugin only on Android and iOS
-(for example, check `defaultTargetPlatform` and `kIsWeb` first).
+method throws a `PlatformException` with code `channel-error`, and the event
+streams send no events (Flutter reports the failed subscription as a
+`MissingPluginException` through `FlutterError`). If your app also runs there,
+call the plugin only on Android and iOS (for example, check
+`defaultTargetPlatform` and `kIsWeb` first).
 
 ## 📝 Notes
 
@@ -389,6 +391,31 @@ error. If your app also runs there, call the plugin only on Android and iOS
 - On iOS, mirroring the screen (AirPlay) counts as recording.
 
 </details>
+
+## 🔁 Migrating to 0.1.0
+
+0.1.0 moves the plugin onto [Pigeon](https://pub.dev/packages/pigeon), as in
+Flutter's current plugin template. `SecureScreenPrivacy`, the navigator
+observer, the events and the enums are unchanged, so most apps only need the
+iOS minimum. The breaking changes:
+
+- **iOS 15 or newer.** Before: iOS 13. After: iOS 15. Set
+  `platform :ios, '15.0'` in `ios/Podfile` and the deployment target in Xcode
+  to 15.0 or higher.
+- **Default implementation renamed.** Before:
+  `MethodChannelSecureScreenPrivacy()` from
+  `secure_screen_privacy_method_channel.dart`. After:
+  `PigeonSecureScreenPrivacy()` from `secure_screen_privacy_pigeon.dart`.
+  Only code that used the class directly needs the new name.
+- **Test hooks.** Before: mocking `MethodChannel('secure_screen_privacy')`, or
+  the `methodChannel`, `screenshotEventChannel` and
+  `screenRecordingEventChannel` fields. After: the channels have new internal
+  names, so those mocks no longer take effect. In tests, replace the whole
+  implementation instead: `SecureScreenPrivacyPlatform.instance = FakePlatform();`
+  with a class that extends `SecureScreenPrivacyPlatform`.
+- **Unsupported platforms.** Before: methods threw `MissingPluginException`.
+  After: they throw `PlatformException` with code `channel-error`. Catch
+  `PlatformException`, or check the platform first.
 
 ## 🐞 Bugs or Requests
 

@@ -26,7 +26,10 @@
     "doc/**",
     "**/.gitignore",
     "**/.metadata",
-    "example/pubspec.yaml"
+    "example/pubspec.yaml",
+    "lib/src/messages.g.dart",
+    "**/Messages.g.kt",
+    "**/Messages.g.swift"
   ],
   "ignoreRegExpList": [
     "/uses: .*/",
@@ -34,6 +37,7 @@
   ],
   "words": [
     "allprojects",
+    "ARGB",
     "autoresizing",
     "backgrounded",
     "backgrounding",
@@ -49,10 +53,13 @@
     "ffprobe",
     "getprop",
     "iphonesimulator",
+    "Millis",
     "mrrhak",
     "noaudio",
     "pana",
     "pillarbox",
+    "Podfile",
+    "pubignore",
     "reactivecircus",
     "recents",
     "reparenting",

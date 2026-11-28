@@ -4,8 +4,6 @@ import android.app.Activity
 import android.view.Window
 import android.view.WindowManager
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito
 import kotlin.test.Test
@@ -23,28 +21,18 @@ import kotlin.test.assertTrue
 
 internal class SecureScreenPrivacyPluginTest {
     @Test
-    fun onMethodCall_getPlatformVersion_returnsExpectedValue() {
+    fun getPlatformVersion_returnsExpectedValue() {
         val plugin = SecureScreenPrivacyPlugin()
 
-        val call = MethodCall("getPlatformVersion", null)
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
-
-        Mockito.verify(mockResult).success("Android " + android.os.Build.VERSION.RELEASE)
+        assertEquals("Android " + android.os.Build.VERSION.RELEASE, plugin.getPlatformVersion())
     }
 
     @Test
-    fun onMethodCall_enableCaptureProtection_withNoActivity_isKeptAndAppliedOnAttach() {
+    fun enableCaptureProtection_withNoActivity_isKeptAndAppliedOnAttach() {
         val plugin = SecureScreenPrivacyPlugin()
 
-        val call = MethodCall("enableCaptureProtection", null)
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
-
-        Mockito.verify(mockResult).success(true)
-        val stateResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("isCaptureProtectionEnabled", null), stateResult)
-        Mockito.verify(stateResult).success(true)
+        assertTrue(plugin.enableCaptureProtection())
+        assertTrue(plugin.isCaptureProtectionEnabled())
 
         // An Activity attaching later must get FLAG_SECURE.
         val (_, mockWindow) = attachActivity(plugin)
@@ -52,79 +40,42 @@ internal class SecureScreenPrivacyPluginTest {
     }
 
     @Test
-    fun onMethodCall_disableCaptureProtection_withNoActivity_isNotReappliedOnAttach() {
+    fun disableCaptureProtection_withNoActivity_isNotReappliedOnAttach() {
         val plugin = SecureScreenPrivacyPlugin()
-        plugin.onMethodCall(
-            MethodCall("enableCaptureProtection", null),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
-        plugin.onMethodCall(
-            MethodCall("disableCaptureProtection", null),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
+        plugin.enableCaptureProtection()
+        plugin.disableCaptureProtection()
 
         val (_, mockWindow) = attachActivity(plugin)
         Mockito.verify(mockWindow, Mockito.never()).addFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
     }
 
     @Test
-    fun onMethodCall_enableCaptureProtection_withActivity_addsFlagSecureAndReturnsTrue() {
+    fun enableCaptureProtection_withActivity_addsFlagSecureAndReturnsTrue() {
         val plugin = SecureScreenPrivacyPlugin()
-        val mockActivity = Mockito.mock(Activity::class.java)
-        val mockWindow = Mockito.mock(Window::class.java)
-        Mockito.`when`(mockActivity.window).thenReturn(mockWindow)
-        val mockBinding = Mockito.mock(ActivityPluginBinding::class.java)
-        Mockito.`when`(mockBinding.activity).thenReturn(mockActivity)
-        plugin.onAttachedToActivity(mockBinding)
+        val (_, mockWindow) = attachActivity(plugin)
 
-        val call = MethodCall("enableCaptureProtection", null)
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
+        assertTrue(plugin.enableCaptureProtection())
 
         Mockito.verify(mockWindow).addFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
-        Mockito.verify(mockResult).success(true)
     }
 
     @Test
-    fun onMethodCall_disableCaptureProtection_withActivity_clearsFlagSecureAndReturnsTrue() {
+    fun disableCaptureProtection_withActivity_clearsFlagSecureAndReturnsTrue() {
         val plugin = SecureScreenPrivacyPlugin()
-        val mockActivity = Mockito.mock(Activity::class.java)
-        val mockWindow = Mockito.mock(Window::class.java)
-        Mockito.`when`(mockActivity.window).thenReturn(mockWindow)
-        val mockBinding = Mockito.mock(ActivityPluginBinding::class.java)
-        Mockito.`when`(mockBinding.activity).thenReturn(mockActivity)
-        plugin.onAttachedToActivity(mockBinding)
+        val (_, mockWindow) = attachActivity(plugin)
 
-        val call = MethodCall("disableCaptureProtection", null)
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
+        assertTrue(plugin.disableCaptureProtection())
 
         Mockito.verify(mockWindow).clearFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
-        Mockito.verify(mockResult).success(true)
     }
 
     @Test
     fun onAttachedToActivity_reappliesFlagSecure_whenCaptureProtectionPreviouslyEnabled() {
         val plugin = SecureScreenPrivacyPlugin()
-        val mockActivity = Mockito.mock(Activity::class.java)
-        val mockWindow = Mockito.mock(Window::class.java)
-        Mockito.`when`(mockActivity.window).thenReturn(mockWindow)
-        val mockBinding = Mockito.mock(ActivityPluginBinding::class.java)
-        Mockito.`when`(mockBinding.activity).thenReturn(mockActivity)
-        plugin.onAttachedToActivity(mockBinding)
-        plugin.onMethodCall(
-            MethodCall("enableCaptureProtection", null),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
+        attachActivity(plugin)
+        plugin.enableCaptureProtection()
 
-        // Simulate a config change recreating the Activity.
-        plugin.onDetachedFromActivityForConfigChanges()
-        val newMockActivity = Mockito.mock(Activity::class.java)
-        val newMockWindow = Mockito.mock(Window::class.java)
-        Mockito.`when`(newMockActivity.window).thenReturn(newMockWindow)
-        val newMockBinding = Mockito.mock(ActivityPluginBinding::class.java)
-        Mockito.`when`(newMockBinding.activity).thenReturn(newMockActivity)
-        plugin.onReattachedToActivityForConfigChanges(newMockBinding)
+        val newMockWindow = recreateActivity(plugin)
 
         Mockito.verify(newMockWindow).addFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
     }
@@ -133,52 +84,25 @@ internal class SecureScreenPrivacyPluginTest {
     fun onAttachedToActivity_reappliesFlagSecure_whenAppSwitcherProtectionPreviouslyEnabled() {
         val plugin = SecureScreenPrivacyPlugin()
         attachActivity(plugin)
-        plugin.onMethodCall(
-            MethodCall("enableAppSwitcherProtection", mapOf("mode" to "color")),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
+        plugin.enableAppSwitcherProtection(colorOptions())
 
-        // Simulate a config change recreating the Activity.
-        plugin.onDetachedFromActivityForConfigChanges()
-        val newMockActivity = Mockito.mock(Activity::class.java)
-        val newMockWindow = Mockito.mock(Window::class.java)
-        Mockito.`when`(newMockActivity.window).thenReturn(newMockWindow)
-        val newMockBinding = Mockito.mock(ActivityPluginBinding::class.java)
-        Mockito.`when`(newMockBinding.activity).thenReturn(newMockActivity)
-        plugin.onReattachedToActivityForConfigChanges(newMockBinding)
+        val newMockWindow = recreateActivity(plugin)
 
         Mockito.verify(newMockWindow).addFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
     }
 
     @Test
-    fun onMethodCall_isCaptureProtectionEnabled_defaultsToFalse() {
-        val plugin = SecureScreenPrivacyPlugin()
-
-        val call = MethodCall("isCaptureProtectionEnabled", null)
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
-
-        Mockito.verify(mockResult).success(false)
+    fun isCaptureProtectionEnabled_defaultsToFalse() {
+        assertFalse(SecureScreenPrivacyPlugin().isCaptureProtectionEnabled())
     }
 
     @Test
-    fun onMethodCall_isCaptureProtectionEnabled_reflectsEnabledState() {
+    fun isCaptureProtectionEnabled_reflectsEnabledState() {
         val plugin = SecureScreenPrivacyPlugin()
-        val mockActivity = Mockito.mock(Activity::class.java)
-        val mockWindow = Mockito.mock(Window::class.java)
-        Mockito.`when`(mockActivity.window).thenReturn(mockWindow)
-        val mockBinding = Mockito.mock(ActivityPluginBinding::class.java)
-        Mockito.`when`(mockBinding.activity).thenReturn(mockActivity)
-        plugin.onAttachedToActivity(mockBinding)
-        plugin.onMethodCall(
-            MethodCall("enableCaptureProtection", null),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
+        attachActivity(plugin)
+        plugin.enableCaptureProtection()
 
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("isCaptureProtectionEnabled", null), mockResult)
-
-        Mockito.verify(mockResult).success(true)
+        assertTrue(plugin.isCaptureProtectionEnabled())
     }
 
     // Returns both the mocked Activity and its mocked Window, so callers that
@@ -195,6 +119,28 @@ internal class SecureScreenPrivacyPluginTest {
         return Pair(mockActivity, mockWindow)
     }
 
+    // Simulates a config change recreating the Activity; returns the new
+    // Activity's Window.
+    private fun recreateActivity(plugin: SecureScreenPrivacyPlugin): Window {
+        plugin.onDetachedFromActivityForConfigChanges()
+        val newMockActivity = Mockito.mock(Activity::class.java)
+        val newMockWindow = Mockito.mock(Window::class.java)
+        Mockito.`when`(newMockActivity.window).thenReturn(newMockWindow)
+        val newMockBinding = Mockito.mock(ActivityPluginBinding::class.java)
+        Mockito.`when`(newMockBinding.activity).thenReturn(newMockActivity)
+        plugin.onReattachedToActivityForConfigChanges(newMockBinding)
+        return newMockWindow
+    }
+
+    private fun colorOptions(
+        mode: AppSwitcherModeMessage = AppSwitcherModeMessage.COLOR,
+    ) = AppSwitcherOptionsMessage(
+        mode = mode,
+        blurIntensity = BlurIntensityMessage.MEDIUM,
+        color = 0xFF000000,
+        imageBackgroundColor = 0xFF000000,
+    )
+
     // App switcher protection on Android has no custom overlay - it's a thin
     // FLAG_SECURE toggle, kept on for the entire enabled lifetime (see the
     // "App switcher protection" comment in SecureScreenPrivacyPlugin.kt for
@@ -204,130 +150,85 @@ internal class SecureScreenPrivacyPluginTest {
     // FLAG_SECURE alone).
 
     @Test
-    fun onMethodCall_enableAppSwitcherProtection_withNoActivity_isKeptAndAppliedOnAttach() {
+    fun enableAppSwitcherProtection_withNoActivity_isKeptAndAppliedOnAttach() {
         val plugin = SecureScreenPrivacyPlugin()
 
-        val call = MethodCall("enableAppSwitcherProtection", mapOf("mode" to "color"))
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
-
-        Mockito.verify(mockResult).success(true)
-        val stateResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("isAppSwitcherProtectionEnabled", null), stateResult)
-        Mockito.verify(stateResult).success(true)
+        assertTrue(plugin.enableAppSwitcherProtection(colorOptions()))
+        assertTrue(plugin.isAppSwitcherProtectionEnabled())
 
         val (_, mockWindow) = attachActivity(plugin)
         Mockito.verify(mockWindow).addFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
     }
 
     @Test
-    fun onMethodCall_enableAppSwitcherProtection_withoutMode_returnsFalse() {
-        val plugin = SecureScreenPrivacyPlugin()
-
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("enableAppSwitcherProtection", emptyMap<String, Any>()), mockResult)
-
-        Mockito.verify(mockResult).success(false)
-    }
-
-    @Test
-    fun onMethodCall_enableAppSwitcherProtection_withActivity_addsFlagSecureAndReturnsTrue() {
+    fun enableAppSwitcherProtection_withActivity_addsFlagSecureAndReturnsTrue() {
         val plugin = SecureScreenPrivacyPlugin()
         val (_, mockWindow) = attachActivity(plugin)
 
-        // blurIntensity/color/imageBackgroundColor are accepted (matching the
-        // real Dart call shape) but Android ignores them - this is verified
-        // by the fact that no mode-specific rendering ever runs, only
-        // FLAG_SECURE is added, regardless of which values are passed here.
-        val call = MethodCall(
-            "enableAppSwitcherProtection",
-            mapOf("mode" to "color", "blurIntensity" to "medium", "color" to 0xFF000000)
-        )
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
+        // blurIntensity is accepted (matching the real Dart call shape) but
+        // Android ignores it - only FLAG_SECURE is added, whatever is passed.
+        assertTrue(plugin.enableAppSwitcherProtection(colorOptions()))
 
         Mockito.verify(mockWindow).addFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
-        Mockito.verify(mockResult).success(true)
     }
 
     @Test
-    fun onMethodCall_isAppSwitcherProtectionEnabled_defaultsToFalse() {
-        val plugin = SecureScreenPrivacyPlugin()
-
-        val call = MethodCall("isAppSwitcherProtectionEnabled", null)
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
-
-        Mockito.verify(mockResult).success(false)
+    fun isAppSwitcherProtectionEnabled_defaultsToFalse() {
+        assertFalse(SecureScreenPrivacyPlugin().isAppSwitcherProtectionEnabled())
     }
 
     @Test
-    fun onMethodCall_isAppSwitcherProtectionEnabled_reflectsEnabledState() {
+    fun isAppSwitcherProtectionEnabled_reflectsEnabledState() {
         val plugin = SecureScreenPrivacyPlugin()
         attachActivity(plugin)
-        plugin.onMethodCall(
-            MethodCall("enableAppSwitcherProtection", mapOf("mode" to "color")),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
+        plugin.enableAppSwitcherProtection(colorOptions())
 
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("isAppSwitcherProtectionEnabled", null), mockResult)
-
-        Mockito.verify(mockResult).success(true)
+        assertTrue(plugin.isAppSwitcherProtectionEnabled())
     }
 
     @Test
-    fun onMethodCall_disableAppSwitcherProtection_clearsFlagSecureAndReturnsTrue() {
+    fun disableAppSwitcherProtection_clearsFlagSecureAndReturnsTrue() {
         val plugin = SecureScreenPrivacyPlugin()
         val (_, mockWindow) = attachActivity(plugin)
-        plugin.onMethodCall(
-            MethodCall("enableAppSwitcherProtection", mapOf("mode" to "color")),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
+        plugin.enableAppSwitcherProtection(colorOptions())
 
-        val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("disableAppSwitcherProtection", null), mockResult)
+        assertTrue(plugin.disableAppSwitcherProtection())
 
         Mockito.verify(mockWindow).clearFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
-        Mockito.verify(mockResult).success(true)
-
-        val isEnabledResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("isAppSwitcherProtectionEnabled", null), isEnabledResult)
-        Mockito.verify(isEnabledResult).success(false)
+        assertFalse(plugin.isAppSwitcherProtectionEnabled())
     }
 
     @Test
-    fun onMethodCall_disableAppSwitcherProtection_withCaptureProtectionEnabled_leavesFlagSecureOn() {
+    fun disableAppSwitcherProtection_withCaptureProtectionEnabled_leavesFlagSecureOn() {
         val plugin = SecureScreenPrivacyPlugin()
         val (_, mockWindow) = attachActivity(plugin)
-        plugin.onMethodCall(MethodCall("enableCaptureProtection", null), Mockito.mock(MethodChannel.Result::class.java))
-        plugin.onMethodCall(
-            MethodCall("enableAppSwitcherProtection", mapOf("mode" to "color")),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
+        plugin.enableCaptureProtection()
+        plugin.enableAppSwitcherProtection(colorOptions())
 
-        plugin.onMethodCall(MethodCall("disableAppSwitcherProtection", null), Mockito.mock(MethodChannel.Result::class.java))
+        plugin.disableAppSwitcherProtection()
 
         Mockito.verify(mockWindow, Mockito.never()).clearFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
     }
 
     @Test
-    fun onMethodCall_disableCaptureProtection_withAppSwitcherProtectionEnabled_leavesFlagSecureOn() {
+    fun disableCaptureProtection_withAppSwitcherProtectionEnabled_leavesFlagSecureOn() {
         val plugin = SecureScreenPrivacyPlugin()
         val (_, mockWindow) = attachActivity(plugin)
-        plugin.onMethodCall(
-            MethodCall("enableAppSwitcherProtection", mapOf("mode" to "color")),
-            Mockito.mock(MethodChannel.Result::class.java)
-        )
-        plugin.onMethodCall(MethodCall("enableCaptureProtection", null), Mockito.mock(MethodChannel.Result::class.java))
+        plugin.enableAppSwitcherProtection(colorOptions())
+        plugin.enableCaptureProtection()
 
-        plugin.onMethodCall(MethodCall("disableCaptureProtection", null), Mockito.mock(MethodChannel.Result::class.java))
+        plugin.disableCaptureProtection()
 
         Mockito.verify(mockWindow, Mockito.never()).clearFlags(eq(WindowManager.LayoutParams.FLAG_SECURE))
+        assertTrue(plugin.isAppSwitcherProtectionEnabled())
+    }
 
-        val isEnabledResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(MethodCall("isAppSwitcherProtectionEnabled", null), isEnabledResult)
-        Mockito.verify(isEnabledResult).success(true)
+    @Test
+    fun appSwitcherModeName_matchesTheDartModeNames() {
+        assertEquals("blur", appSwitcherModeName(AppSwitcherModeMessage.BLUR))
+        assertEquals("image", appSwitcherModeName(AppSwitcherModeMessage.IMAGE))
+        assertEquals("color", appSwitcherModeName(AppSwitcherModeMessage.COLOR))
+        assertEquals("imageBlur", appSwitcherModeName(AppSwitcherModeMessage.IMAGE_BLUR))
     }
 
     // shouldEmitScreenshotEvent - the pure filter used by the screenshot

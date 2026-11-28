@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.0
+
+Moves the plugin onto [Pigeon](https://pub.dev/packages/pigeon), as in the
+Flutter 3.50.1 plugin template. Protection, detection and the public
+`SecureScreenPrivacy` API work as before. See "Migrating to 0.1.0" in the
+README.
+
+### Breaking changes
+
+- iOS 15.0 or newer is required (was iOS 13.0).
+- `MethodChannelSecureScreenPrivacy` (`secure_screen_privacy_method_channel.dart`)
+  is replaced by `PigeonSecureScreenPrivacy` (`secure_screen_privacy_pigeon.dart`).
+  Its `methodChannel`, `screenshotEventChannel` and
+  `screenRecordingEventChannel` fields are gone; it takes an optional `api`
+  for tests instead.
+- The platform channels have new names, so mocks of
+  `MethodChannel('secure_screen_privacy')` and its event channels no longer
+  take effect. Set `SecureScreenPrivacyPlatform.instance` to a fake instead.
+- On unsupported platforms, methods throw `PlatformException` with code
+  `channel-error` instead of `MissingPluginException`.
+
+### Other changes
+
+- The Dart, Kotlin and Swift code for the platform calls is generated from
+  `pigeon/messages.dart`, with typed App Switcher options and events. CI
+  checks the generated files are up to date.
+- Android: Android Gradle plugin 9.3.1 and Kotlin 2.4.20 for the plugin build.
+
 ## 0.0.1
 
 First release.

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secure_screen_privacy/secure_screen_privacy.dart';
 import 'package:secure_screen_privacy/secure_screen_privacy_platform_interface.dart';
-import 'package:secure_screen_privacy/secure_screen_privacy_method_channel.dart';
+import 'package:secure_screen_privacy/secure_screen_privacy_pigeon.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 class MockSecureScreenPrivacyPlatform
@@ -50,8 +50,8 @@ void main() {
   final SecureScreenPrivacyPlatform initialPlatform =
       SecureScreenPrivacyPlatform.instance;
 
-  test('$MethodChannelSecureScreenPrivacy is the default instance', () {
-    expect(initialPlatform, isInstanceOf<MethodChannelSecureScreenPrivacy>());
+  test('$PigeonSecureScreenPrivacy is the default instance', () {
+    expect(initialPlatform, isInstanceOf<PigeonSecureScreenPrivacy>());
   });
 
   test('getPlatformVersion', () async {

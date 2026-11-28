@@ -16,6 +16,9 @@ pubspec.lock
 # Repo tooling, not needed to use the package.
 CLAUDE.md
 cspell.json
+# The Pigeon definition only regenerates the lib/src/messages.g.dart,
+# Messages.g.kt and Messages.g.swift files that ship.
+/pigeon/
 
 # Native unit tests run in this repo's CI only.
 /android/src/test/

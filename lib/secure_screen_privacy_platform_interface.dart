@@ -4,7 +4,7 @@ import 'app_switcher_protection_mode.dart';
 import 'blur_intensity.dart';
 import 'screen_recording_event.dart';
 import 'screenshot_event.dart';
-import 'secure_screen_privacy_method_channel.dart';
+import 'secure_screen_privacy_pigeon.dart';
 
 /// The interface that platform implementations of this plugin extend.
 ///
@@ -15,12 +15,11 @@ abstract class SecureScreenPrivacyPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static SecureScreenPrivacyPlatform _instance =
-      MethodChannelSecureScreenPrivacy();
+  static SecureScreenPrivacyPlatform _instance = PigeonSecureScreenPrivacy();
 
   /// The default instance of [SecureScreenPrivacyPlatform] to use.
   ///
-  /// Defaults to [MethodChannelSecureScreenPrivacy].
+  /// Defaults to [PigeonSecureScreenPrivacy].
   static SecureScreenPrivacyPlatform get instance => _instance;
 
   /// Platform-specific implementations should set this with their own

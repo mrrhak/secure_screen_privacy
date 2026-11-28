@@ -20,33 +20,22 @@ import android.view.WindowManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.EventChannel
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler
-import io.flutter.plugin.common.MethodChannel.Result
 import java.util.function.Consumer
 
 /** SecureScreenPrivacyPlugin */
 class SecureScreenPrivacyPlugin :
     FlutterPlugin,
-    MethodCallHandler,
-    ActivityAware,
-    EventChannel.StreamHandler {
-    // The MethodChannel that will the communication between Flutter and native Android
-    //
-    // This local reference serves to register the plugin with the Flutter Engine and unregister it
-    // when the Flutter Engine is detached from the Activity
-    private lateinit var channel: MethodChannel
+    SecureScreenPrivacyPluginApi,
+    ActivityAware {
     private lateinit var appContext: Context
     private var activity: Activity? = null
-    private var isCaptureProtectionEnabled = false
+    private var captureProtectionOn = false
 
     // App switcher protection state. Android has no custom overlay - see the
     // "App switcher protection" section below for why FLAG_SECURE alone is
     // the whole implementation here, unlike iOS which keeps a full set of
     // custom overlay modes.
-    private var isAppSwitcherProtectionEnabled = false
+    private var appSwitcherProtectionOn = false
     private var appSwitcherMode: String? = null
     private var appSwitcherColor: Int? = null
     private var appSwitcherImageBackgroundColor: Int? = null
@@ -72,8 +61,8 @@ class SecureScreenPrivacyPlugin :
     // recording below); below API 34 a MediaStore ContentObserver registered
     // against the engine-scoped appContext, de-duplicated by
     // screenshotDeduper.
-    private lateinit var screenshotEventChannel: EventChannel
-    private var screenshotEventSink: EventChannel.EventSink? = null
+    private var screenshotEventChannel: ScreenshotEventsEventChannel? = null
+    private var screenshotEventSink: PigeonEventSink<ScreenshotEventMessage>? = null
     private var isScreenshotListening = false
     private var screenshotCaptureCallback: Activity.ScreenCaptureCallback? = null // API 34+ only
     private var screenshotContentObserver: ContentObserver? = null
@@ -103,78 +92,69 @@ class SecureScreenPrivacyPlugin :
     // (act.windowManager / act.mainExecutor need a live Activity), so this
     // needs its own isRecordingListening flag wired through the ActivityAware
     // callbacks below rather than being set up once at engine-attach time.
-    private lateinit var screenRecordingEventChannel: EventChannel
-    private var screenRecordingEventSink: EventChannel.EventSink? = null
+    private var screenRecordingEventChannel: ScreenRecordingEventsEventChannel? = null
+    private var screenRecordingEventSink: PigeonEventSink<ScreenRecordingEventMessage>? = null
     private var isRecordingListening = false
     private var screenRecordingCallback: Consumer<Int>? = null // API 35+ only
     private val screenRecordingStateDeduper = ScreenRecordingStateDeduper()
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         appContext = flutterPluginBinding.applicationContext
-        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "secure_screen_privacy")
-        channel.setMethodCallHandler(this)
+        val messenger = flutterPluginBinding.binaryMessenger
+        SecureScreenPrivacyPluginApi.setUp(messenger, this)
 
-        screenshotEventChannel =
-            EventChannel(flutterPluginBinding.binaryMessenger, "secure_screen_privacy/screenshot_events")
-        screenshotEventChannel.setStreamHandler(this)
-
-        // A dedicated handler object, not `this`: a single StreamHandler
-        // instance registered against two different channels can't tell
-        // which channel's onListen/onCancel it's being called for (the
-        // `arguments` parameter is only the Dart-side listen() payload, never
-        // the channel name) - sharing one would incorrectly arm this
-        // channel's native side effects whenever the OTHER channel is
-        // subscribed to, and vice versa.
+        // Each stream has its own handler object: one handler registered
+        // against two channels couldn't tell which channel's onListen /
+        // onCancel it's being called for, and would arm one stream's native
+        // side effects whenever the other is subscribed to.
+        screenshotEventChannel = ScreenshotEventsStreamHandler.register(messenger, screenshotStreamHandler)
         screenRecordingEventChannel =
-            EventChannel(flutterPluginBinding.binaryMessenger, "secure_screen_privacy/screen_recording_events")
-        screenRecordingEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-                screenRecordingEventSink = events
-                isRecordingListening = true
-                // A new subscriber always gets the current state first.
-                screenRecordingStateDeduper.reset()
-                // Below API 35 there's nothing to register, so tell the
-                // subscriber once that the state is unknown instead of
-                // sending nothing. Sent here, not on Activity attach, so it
-                // isn't repeated on every Activity recreation.
-                if (screenRecordingRegistrationPathForSdkInt(Build.VERSION.SDK_INT) ==
-                    ScreenRecordingRegistrationPath.UNSUPPORTED
-                ) {
-                    emitScreenRecordingEvent(null)
-                }
-                registerScreenRecordingCallbacksIfNeeded()
-            }
-
-            override fun onCancel(arguments: Any?) {
-                isRecordingListening = false
-                unregisterScreenRecordingCallbacks()
-                screenRecordingEventSink = null
-            }
-        })
+            ScreenRecordingEventsStreamHandler.register(messenger, screenRecordingStreamHandler)
     }
 
-    override fun onMethodCall(
-        call: MethodCall,
-        result: Result
-    ) {
-        when (call.method) {
-            "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
-            "enableCaptureProtection" -> result.success(setCaptureProtection(true))
-            "disableCaptureProtection" -> result.success(setCaptureProtection(false))
-            "isCaptureProtectionEnabled" -> result.success(isCaptureProtectionEnabled)
-            "enableAppSwitcherProtection" -> {
-                val mode = call.argument<String>("mode")
-                result.success(
-                    setAppSwitcherProtection(
-                        mode,
-                        (call.argument<Any>("color") as? Number)?.toInt(),
-                        (call.argument<Any>("imageBackgroundColor") as? Number)?.toInt(),
-                    )
-                )
+    // SecureScreenPrivacyPluginApi (Pigeon host API)
+
+    override fun getPlatformVersion(): String = "Android ${Build.VERSION.RELEASE}"
+
+    override fun enableCaptureProtection(): Boolean = setCaptureProtection(true)
+
+    override fun disableCaptureProtection(): Boolean = setCaptureProtection(false)
+
+    override fun isCaptureProtectionEnabled(): Boolean = captureProtectionOn
+
+    override fun enableAppSwitcherProtection(options: AppSwitcherOptionsMessage): Boolean =
+        setAppSwitcherProtection(
+            appSwitcherModeName(options.mode),
+            options.color.toInt(),
+            options.imageBackgroundColor.toInt(),
+        )
+
+    override fun disableAppSwitcherProtection(): Boolean = clearAppSwitcherProtection()
+
+    override fun isAppSwitcherProtectionEnabled(): Boolean = appSwitcherProtectionOn
+
+    private val screenRecordingStreamHandler = object : ScreenRecordingEventsStreamHandler() {
+        override fun onListen(p0: Any?, sink: PigeonEventSink<ScreenRecordingEventMessage>) {
+            screenRecordingEventSink = sink
+            isRecordingListening = true
+            // A new subscriber always gets the current state first.
+            screenRecordingStateDeduper.reset()
+            // Below API 35 there's nothing to register, so tell the
+            // subscriber once that the state is unknown instead of
+            // sending nothing. Sent here, not on Activity attach, so it
+            // isn't repeated on every Activity recreation.
+            if (screenRecordingRegistrationPathForSdkInt(Build.VERSION.SDK_INT) ==
+                ScreenRecordingRegistrationPath.UNSUPPORTED
+            ) {
+                emitScreenRecordingEvent(null)
             }
-            "disableAppSwitcherProtection" -> result.success(clearAppSwitcherProtection())
-            "isAppSwitcherProtectionEnabled" -> result.success(isAppSwitcherProtectionEnabled)
-            else -> result.notImplemented()
+            registerScreenRecordingCallbacksIfNeeded()
+        }
+
+        override fun onCancel(p0: Any?) {
+            isRecordingListening = false
+            unregisterScreenRecordingCallbacks()
+            screenRecordingEventSink = null
         }
     }
 
@@ -188,12 +168,21 @@ class SecureScreenPrivacyPlugin :
     // updateScreenshotObserver); see shouldEmitScreenshotEvent for its
     // filtering heuristic and documented tradeoffs.
 
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-        screenshotEventSink = events
-        isScreenshotListening = true
-        when (screenshotDetectionPathForSdkInt(Build.VERSION.SDK_INT)) {
-            ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK -> registerScreenshotCaptureCallbackIfNeeded()
-            ScreenshotDetectionPath.MEDIA_STORE_OBSERVER -> updateScreenshotObserver()
+    private val screenshotStreamHandler = object : ScreenshotEventsStreamHandler() {
+        override fun onListen(p0: Any?, sink: PigeonEventSink<ScreenshotEventMessage>) {
+            screenshotEventSink = sink
+            isScreenshotListening = true
+            when (screenshotDetectionPathForSdkInt(Build.VERSION.SDK_INT)) {
+                ScreenshotDetectionPath.ACTIVITY_SCREEN_CAPTURE_CALLBACK -> registerScreenshotCaptureCallbackIfNeeded()
+                ScreenshotDetectionPath.MEDIA_STORE_OBSERVER -> updateScreenshotObserver()
+            }
+        }
+
+        override fun onCancel(p0: Any?) {
+            isScreenshotListening = false
+            unregisterScreenshotCaptureCallback()
+            unregisterScreenshotObserver()
+            screenshotEventSink = null
         }
     }
 
@@ -271,13 +260,6 @@ class SecureScreenPrivacyPlugin :
         updateScreenshotObserver()
     }
 
-    override fun onCancel(arguments: Any?) {
-        isScreenshotListening = false
-        unregisterScreenshotCaptureCallback()
-        unregisterScreenshotObserver()
-        screenshotEventSink = null
-    }
-
     // API 34+: Activity.ScreenCaptureCallback fires exactly once per
     // screenshot, only while this app's Activity is visible. It still fires
     // when the window has FLAG_SECURE (the saved image is black), as seen on
@@ -292,7 +274,7 @@ class SecureScreenPrivacyPlugin :
         ) return
         val act = activity ?: return
         val callback = Activity.ScreenCaptureCallback {
-            screenshotEventSink?.success(mapOf("timestamp" to System.currentTimeMillis()))
+            screenshotEventSink?.success(ScreenshotEventMessage(System.currentTimeMillis()))
         }
         try {
             act.registerScreenCaptureCallback(act.mainExecutor, callback)
@@ -405,7 +387,7 @@ class SecureScreenPrivacyPlugin :
         ) {
             // Detection time, like the API 34+ path and iOS. DATE_ADDED is
             // only whole seconds, so it would read up to a second early.
-            val payload = mapOf("timestamp" to now)
+            val payload = ScreenshotEventMessage(now)
             Handler(Looper.getMainLooper()).post {
                 screenshotEventSink?.success(payload)
             }
@@ -481,7 +463,7 @@ class SecureScreenPrivacyPlugin :
     private fun emitScreenRecordingEvent(isRecording: Boolean?) {
         if (!screenRecordingStateDeduper.shouldEmit(isRecording)) return
         screenRecordingEventSink?.success(
-            mapOf("isRecording" to isRecording, "timestamp" to System.currentTimeMillis())
+            ScreenRecordingEventMessage(isRecording, System.currentTimeMillis())
         )
     }
 
@@ -497,15 +479,15 @@ class SecureScreenPrivacyPlugin :
     // applies it as soon as an Activity attaches. Dropping the request
     // instead would leave the screen unprotected with no later retry.
     private fun setCaptureProtection(enabled: Boolean): Boolean {
-        isCaptureProtectionEnabled = enabled
+        captureProtectionOn = enabled
         val window = activity?.window ?: return true
         if (enabled) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        } else if (!isAppSwitcherProtectionEnabled) {
+        } else if (!appSwitcherProtectionOn) {
             // Only clear the flag if app switcher protection isn't also
             // relying on it - otherwise disabling capture protection alone
             // would silently turn app switcher protection off too, even
-            // though isAppSwitcherProtectionEnabled would still report true.
+            // though appSwitcherProtectionOn would still report true.
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
         updateTaskBackgroundColor()
@@ -541,12 +523,11 @@ class SecureScreenPrivacyPlugin :
     // Like setCaptureProtection, recorded even with no Activity attached yet
     // and applied by reapplyFlagSecureIfNeeded() on attach.
     private fun setAppSwitcherProtection(
-        mode: String?,
+        mode: String,
         color: Int?,
         imageBackgroundColor: Int?,
     ): Boolean {
-        if (mode == null) return false
-        isAppSwitcherProtectionEnabled = true
+        appSwitcherProtectionOn = true
         appSwitcherMode = mode
         appSwitcherColor = color
         appSwitcherImageBackgroundColor = imageBackgroundColor
@@ -556,11 +537,11 @@ class SecureScreenPrivacyPlugin :
     }
 
     private fun clearAppSwitcherProtection(): Boolean {
-        isAppSwitcherProtectionEnabled = false
+        appSwitcherProtectionOn = false
         appSwitcherMode = null
         appSwitcherColor = null
         appSwitcherImageBackgroundColor = null
-        if (!isCaptureProtectionEnabled) {
+        if (!captureProtectionOn) {
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
         updateTaskBackgroundColor()
@@ -575,11 +556,11 @@ class SecureScreenPrivacyPlugin :
     private fun updateTaskBackgroundColor() {
         if (!isTaskBackgroundColorSupported(Build.VERSION.SDK_INT)) return
         val act = activity ?: return
-        val isProtected = isCaptureProtectionEnabled || isAppSwitcherProtectionEnabled
+        val isProtected = captureProtectionOn || appSwitcherProtectionOn
         if (!isProtected && !hasSetTaskBackgroundColor) return
         val background = if (isProtected) {
             appSwitcherCardColor(
-                if (isAppSwitcherProtectionEnabled) appSwitcherMode else null,
+                if (appSwitcherProtectionOn) appSwitcherMode else null,
                 appSwitcherColor,
                 appSwitcherImageBackgroundColor,
                 themeBackgroundColor(act),
@@ -658,13 +639,15 @@ class SecureScreenPrivacyPlugin :
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
-        screenshotEventChannel.setStreamHandler(null)
+        SecureScreenPrivacyPluginApi.setUp(binding.binaryMessenger, null)
+        screenshotEventChannel?.setStreamHandler(null)
+        screenshotEventChannel = null
         isScreenshotListening = false
         unregisterScreenshotCaptureCallback() // safety net if onCancel never fired
         unregisterScreenshotObserver() // safety net if onCancel never fired
         screenshotEventSink = null
-        screenRecordingEventChannel.setStreamHandler(null)
+        screenRecordingEventChannel?.setStreamHandler(null)
+        screenRecordingEventChannel = null
         unregisterScreenRecordingCallbacks() // safety net if onCancel never fired
         screenRecordingEventSink = null
         isRecordingListening = false
@@ -714,7 +697,7 @@ class SecureScreenPrivacyPlugin :
     }
 
     private fun reapplyFlagSecureIfNeeded() {
-        if (isCaptureProtectionEnabled || isAppSwitcherProtectionEnabled) {
+        if (captureProtectionOn || appSwitcherProtectionOn) {
             activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
@@ -883,4 +866,13 @@ internal fun appSwitcherCardColor(
         else -> null
     } ?: themeColor
     return if (chosen == 0) 0 else chosen or 0xFF000000.toInt()
+}
+
+// The mode names the rest of this file (and appSwitcherCardColor) works with,
+// the same names as the Dart AppSwitcherProtectionMode values.
+internal fun appSwitcherModeName(mode: AppSwitcherModeMessage): String = when (mode) {
+    AppSwitcherModeMessage.BLUR -> "blur"
+    AppSwitcherModeMessage.IMAGE -> "image"
+    AppSwitcherModeMessage.COLOR -> "color"
+    AppSwitcherModeMessage.IMAGE_BLUR -> "imageBlur"
 }
