@@ -24,6 +24,9 @@ cspell.json
 /android/src/test/
 
 # doc/images is kept: pubspec.yaml lists a screenshot from it for pub.dev.
+# The iOS App Switcher shots are only for the README, which loads them from
+# GitHub.
+/doc/images/ios_app_switcher_*.png
 
 # The example's platform runners aren't needed to read the example, and
 # README images load from GitHub.
