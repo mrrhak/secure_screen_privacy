@@ -1,7 +1,9 @@
 import Flutter
 import UIKit
 
-public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate, FlutterStreamHandler {
+public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
+  SecureScreenPrivacyPluginApi
+{
   /// Backing text field whose internal secure layer is used to block
   /// screenshots and screen recording of the app's window.
   private var screenPreventField = UITextField()
@@ -12,7 +14,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // to be active (that can be another window of the same app). A property so
   // tests can stand in for the registrar. nil falls back to activeWindow().
   var ownWindowProvider: () -> UIWindow? = { nil }
-  private var isCaptureProtectionEnabled = false
+  private var captureProtectionOn = false
 
   // App switcher protection state.
   private var appSwitcherMode: String?
@@ -22,35 +24,36 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   private var appSwitcherBlurIntensity: String = "ultraLight"
   private var appSwitcherColor: UIColor = .black
   private var appSwitcherImageBackgroundColor: UIColor = .black
-  private var isAppSwitcherProtectionEnabled = false
+  private var appSwitcherProtectionOn = false
   // The overlay views covering each window (one per overlay host, see
   // overlayHosts(in:)), keyed weakly by the window: on iPad multi-window
   // each UIWindowScene resigns/activates independently, so a single shared
   // overlay slot could cover the wrong window or be removed from a window
   // that is still in the App Switcher.
   private let overlays = NSMapTable<UIWindow, NSArray>.weakToStrongObjects()
-  private var screenshotEventSink: FlutterEventSink?
+  private var screenshotEventSink: ((ScreenshotEventMessage) -> Void)?
   // Collapses the duplicate screenshot notifications iOS posts for a single
   // screenshot (see handleScreenshotTaken()).
   var screenshotDeduper = ScreenshotEventDeduper()
   // Whether the app is on screen right now (see isAppOnScreen()); a
   // variable so tests can simulate a backgrounded app.
   var appOnScreenProvider: () -> Bool = { SecureScreenPrivacyPlugin.isAppOnScreen() }
-  private var screenRecordingEventSink: FlutterEventSink?
+  private var screenRecordingEventSink: ((ScreenRecordingEventMessage) -> Void)?
   private var isRecordingListening = false
   // Drops a recording state equal to the last one sent (see
   // emitScreenRecordingEvent).
   var screenRecordingStateDeduper = ScreenRecordingStateDeduper()
-  // Strong reference: FlutterEventChannel.setStreamHandler does not
-  // document that it retains the handler, so this plugin holds it
+  // Strong references: FlutterEventChannel.setStreamHandler does not
+  // document that it retains the handler, so this plugin holds them
   // explicitly rather than relying on undocumented retention behavior.
+  private var screenshotStreamHandler: ScreenshotStreamHandler?
   private var screenRecordingStreamHandler: ScreenRecordingStreamHandler?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "secure_screen_privacy", binaryMessenger: registrar.messenger())
+    let messenger = registrar.messenger()
     let instance = SecureScreenPrivacyPlugin()
     instance.ownWindowProvider = { [weak registrar] in registrar?.viewController?.view.window }
-    registrar.addMethodCallDelegate(instance, channel: channel)
+    SecureScreenPrivacyPluginApiSetup.setUp(binaryMessenger: messenger, api: instance)
     // Register both delegate styles so re-attachment fires regardless of
     // whether the host app is UIApplicationDelegate-only or UIScene-based
     // (legacy app-delegate lifecycle callbacks stop firing for scene-based
@@ -58,21 +61,46 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     registrar.addApplicationDelegate(instance)
     registrar.addSceneDelegate(instance)
 
-    let screenshotEventChannel = FlutterEventChannel(
-      name: "secure_screen_privacy/screenshot_events", binaryMessenger: registrar.messenger())
-    screenshotEventChannel.setStreamHandler(instance)
-
-    // A dedicated handler object, not `instance` itself: a single
-    // FlutterStreamHandler registered against two different channels can't
-    // tell which channel's onListen/onCancel it's being called for, since
-    // `arguments` is only the Dart-side listen() payload, never the channel
-    // name - sharing one would incorrectly arm this channel's native side
-    // effects whenever the OTHER channel is subscribed to, and vice versa.
-    let screenRecordingEventChannel = FlutterEventChannel(
-      name: "secure_screen_privacy/screen_recording_events", binaryMessenger: registrar.messenger())
+    // One handler object per stream: a single handler registered against
+    // two channels can't tell which channel's onListen/onCancel it's being
+    // called for, so sharing one would arm one stream's native side effects
+    // whenever the other is subscribed to.
+    let screenshotHandler = ScreenshotStreamHandler(plugin: instance)
+    instance.screenshotStreamHandler = screenshotHandler
+    ScreenshotEventsStreamHandler.register(with: messenger, streamHandler: screenshotHandler)
     let recordingHandler = ScreenRecordingStreamHandler(plugin: instance)
     instance.screenRecordingStreamHandler = recordingHandler
-    screenRecordingEventChannel.setStreamHandler(recordingHandler)
+    ScreenRecordingEventsStreamHandler.register(with: messenger, streamHandler: recordingHandler)
+  }
+
+  // MARK: - SecureScreenPrivacyPluginApi (Pigeon host API)
+
+  func getPlatformVersion() throws -> String {
+    "iOS " + UIDevice.current.systemVersion
+  }
+
+  func enableCaptureProtection() throws -> Bool {
+    setCaptureProtection(true)
+  }
+
+  func disableCaptureProtection() throws -> Bool {
+    setCaptureProtection(false)
+  }
+
+  func isCaptureProtectionEnabled() throws -> Bool {
+    captureProtectionOn
+  }
+
+  func enableAppSwitcherProtection(options: AppSwitcherOptionsMessage) throws -> Bool {
+    setAppSwitcherProtection(options)
+  }
+
+  func disableAppSwitcherProtection() throws -> Bool {
+    clearAppSwitcherProtection()
+  }
+
+  func isAppSwitcherProtectionEnabled() throws -> Bool {
+    appSwitcherProtectionOn
   }
 
   // MARK: - Screenshot detection
@@ -86,8 +114,8 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // scene-specific dual-hook. It can still arrive more than once for a
   // single screenshot, though - see handleScreenshotTaken().
 
-  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    screenshotEventSink = events
+  func handleScreenshotListen(_ sink: @escaping (ScreenshotEventMessage) -> Void) {
+    screenshotEventSink = sink
     screenshotDeduper.reset()
     NotificationCenter.default.addObserver(
       self,
@@ -95,18 +123,16 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
       name: UIApplication.userDidTakeScreenshotNotification,
       object: nil
     )
-    return nil
   }
 
-  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+  func handleScreenshotCancel() {
     NotificationCenter.default.removeObserver(self, name: UIApplication.userDidTakeScreenshotNotification, object: nil)
     screenshotEventSink = nil
-    return nil
   }
 
   // Apple's documentation does not explicitly guarantee
   // userDidTakeScreenshotNotification is posted on the main thread. It's
-  // commonly observed to be main-thread in practice, but FlutterEventSink
+  // commonly observed to be main-thread in practice, but the event sink
   // must only be invoked on the platform (main) thread, so the dispatch
   // below is a cheap, unconditional safety net rather than an assumption.
   //
@@ -125,7 +151,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     guard screenshotDeduper.shouldEmit(at: ProcessInfo.processInfo.systemUptime) else { return }
     let millis = Int64(Date().timeIntervalSince1970 * 1000)
     DispatchQueue.main.async { [weak self] in
-      self?.screenshotEventSink?(["timestamp": millis])
+      self?.screenshotEventSink?(ScreenshotEventMessage(timestampMillis: millis))
     }
   }
 
@@ -182,8 +208,8 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
       ?? scenes.first
   }
 
-  func handleRecordingListen(_ events: @escaping FlutterEventSink) {
-    screenRecordingEventSink = events
+  func handleRecordingListen(_ sink: @escaping (ScreenRecordingEventMessage) -> Void) {
+    screenRecordingEventSink = sink
     isRecordingListening = true
     // A new subscriber always gets the current state first.
     screenRecordingStateDeduper.reset()
@@ -220,28 +246,8 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     let millis = Int64(Date().timeIntervalSince1970 * 1000)
     DispatchQueue.main.async { [weak self] in
       guard let self = self, self.screenRecordingStateDeduper.shouldEmit(isRecording) else { return }
-      self.screenRecordingEventSink?(["isRecording": isRecording, "timestamp": millis])
-    }
-  }
-
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-    case "getPlatformVersion":
-      result("iOS " + UIDevice.current.systemVersion)
-    case "enableCaptureProtection":
-      result(setCaptureProtection(true))
-    case "disableCaptureProtection":
-      result(setCaptureProtection(false))
-    case "isCaptureProtectionEnabled":
-      result(isCaptureProtectionEnabled)
-    case "enableAppSwitcherProtection":
-      result(setAppSwitcherProtection(from: call.arguments as? [String: Any]))
-    case "disableAppSwitcherProtection":
-      result(clearAppSwitcherProtection())
-    case "isAppSwitcherProtectionEnabled":
-      result(isAppSwitcherProtectionEnabled)
-    default:
-      result(FlutterMethodNotImplemented)
+      self.screenRecordingEventSink?(
+        ScreenRecordingEventMessage(isRecording: isRecording, timestampMillis: millis))
     }
   }
 
@@ -255,11 +261,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   private func activeWindow() -> UIWindow? {
     if let windowScene = UIApplication.shared.connectedScenes
       .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-      if #available(iOS 15.0, *) {
-        return windowScene.keyWindow
-      } else {
-        return windowScene.windows.first(where: { $0.isKeyWindow })
-      }
+      return windowScene.keyWindow
     }
     return nil
   }
@@ -321,7 +323,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // if no route ever turned it on.
   @discardableResult
   private func setCaptureProtection(_ enabled: Bool) -> Bool {
-    isCaptureProtectionEnabled = enabled
+    captureProtectionOn = enabled
     if enabled {
       attachWindowIfNeeded()
     }
@@ -349,8 +351,8 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // Siri, Control Center, share sheet) - the overlay will briefly flash in
   // those cases too, which is inherent to the technique.
 
-  private func setAppSwitcherProtection(from arguments: [String: Any]?) -> Bool {
-    guard let mode = arguments?["mode"] as? String else { return false }
+  private func setAppSwitcherProtection(_ options: AppSwitcherOptionsMessage) -> Bool {
+    let mode = SecureScreenPrivacyPlugin.modeName(options.mode)
     // A missing SecureScreenPrivacyImage asset no longer refuses the call:
     // returning false left the App Switcher showing live content, and the
     // route observer (which ignores the result) never noticed. The overlay
@@ -362,22 +364,17 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     }
 
     appSwitcherMode = mode
-    if let intensity = arguments?["blurIntensity"] as? String {
-      appSwitcherBlurIntensity = intensity
-    }
-    if let colorValue = arguments?["color"] as? NSNumber {
-      appSwitcherColor = SecureScreenPrivacyPlugin.color(fromARGB: colorValue)
-    }
-    if let imageBackgroundColorValue = arguments?["imageBackgroundColor"] as? NSNumber {
-      appSwitcherImageBackgroundColor = SecureScreenPrivacyPlugin.color(fromARGB: imageBackgroundColorValue)
-    }
-    isAppSwitcherProtectionEnabled = true
+    appSwitcherBlurIntensity = SecureScreenPrivacyPlugin.blurIntensityName(options.blurIntensity)
+    appSwitcherColor = SecureScreenPrivacyPlugin.color(fromARGB: NSNumber(value: options.color))
+    appSwitcherImageBackgroundColor = SecureScreenPrivacyPlugin.color(
+      fromARGB: NSNumber(value: options.imageBackgroundColor))
+    appSwitcherProtectionOn = true
     return true
   }
 
   @discardableResult
   private func clearAppSwitcherProtection() -> Bool {
-    isAppSwitcherProtectionEnabled = false
+    appSwitcherProtectionOn = false
     appSwitcherMode = nil
     removeAllOverlays()
     // Restores what showOverlay() turned off, in case this is called
@@ -385,7 +382,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     // explicitly disabled while backgrounded) - without this, capture
     // protection would report enabled but the underlying secure field
     // would stay off until the next foreground transition.
-    if isCaptureProtectionEnabled {
+    if captureProtectionOn {
       screenPreventField.isSecureTextEntry = true
     }
     return true
@@ -411,7 +408,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     // yet. Only for the window the secure field actually protects: on iPad
     // multi-window, covering some other scene's window must not switch off
     // capture protection for a window that may still be live.
-    if isCaptureProtectionEnabled, window === attachedWindow {
+    if captureProtectionOn, window === attachedWindow {
       screenPreventField.isSecureTextEntry = false
     }
   }
@@ -544,6 +541,26 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // lightest tier (matching the Dart-side default) for any unrecognized
   // name, e.g. a version skew between an older native build and a newer
   // Dart client that added a fifth tier.
+  // The mode and intensity names the rest of this file works with, the same
+  // names as the Dart AppSwitcherProtectionMode and BlurIntensity values.
+  static func modeName(_ mode: AppSwitcherModeMessage) -> String {
+    switch mode {
+    case .blur: return "blur"
+    case .image: return "image"
+    case .color: return "color"
+    case .imageBlur: return "imageBlur"
+    }
+  }
+
+  static func blurIntensityName(_ intensity: BlurIntensityMessage) -> String {
+    switch intensity {
+    case .ultraLight: return "ultraLight"
+    case .light: return "light"
+    case .medium: return "medium"
+    case .heavy: return "heavy"
+    }
+  }
+
   private static func blurStyle(forIntensity intensity: String) -> UIBlurEffect.Style {
     switch intensity {
     case "ultraLight": return .systemUltraThinMaterial
@@ -570,7 +587,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // Both resolve the window(s) to act on from the callback's own scene or
   // application, never from whichever scene is foregroundActive right now.
   private func handleWillResignActive(windows: [UIWindow]) {
-    guard isAppSwitcherProtectionEnabled, let mode = appSwitcherMode else { return }
+    guard appSwitcherProtectionOn, let mode = appSwitcherMode else { return }
     // Both the app-delegate and scene-delegate variants can fire for the
     // same transition - skip a window that is already covered.
     for window in windows where overlays.object(forKey: window) == nil {
@@ -587,7 +604,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     } else {
       removeAllOverlays()
     }
-    guard isCaptureProtectionEnabled else { return }
+    guard captureProtectionOn else { return }
     attachWindowIfNeeded()
     // Leave the secure field off while the protected window is still
     // covered (another scene became active, not this one): showOverlay()
@@ -606,7 +623,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // snapshot (see showOverlay()), and the field stays as it is.
   // `scene` is nil for the app-delegate variants (the whole app).
   private func handleDidEnterBackground(scene: UIScene?) {
-    guard isCaptureProtectionEnabled, !isAppSwitcherProtectionEnabled,
+    guard captureProtectionOn, !appSwitcherProtectionOn,
       let attached = attachedWindow
     else { return }
     if let scene = scene, attached.windowScene !== scene { return }
@@ -614,7 +631,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   }
 
   private func handleWillEnterForeground(scene: UIScene?) {
-    guard isCaptureProtectionEnabled, let attached = attachedWindow else { return }
+    guard captureProtectionOn, let attached = attachedWindow else { return }
     if let scene = scene, attached.windowScene !== scene { return }
     // Still covered by the app switcher overlay: showOverlay() keeps the
     // field off until handleDidBecomeActive() removes the overlay.
@@ -708,21 +725,35 @@ struct ScreenRecordingStateDeduper {
   }
 }
 
-// Dedicated FlutterStreamHandler for the screen-recording EventChannel
-private final class ScreenRecordingStreamHandler: NSObject, FlutterStreamHandler {
+// Pigeon stream handlers, one per event channel, forwarding to the plugin.
+private final class ScreenshotStreamHandler: ScreenshotEventsStreamHandler {
   weak var plugin: SecureScreenPrivacyPlugin?
 
   init(plugin: SecureScreenPrivacyPlugin) {
     self.plugin = plugin
   }
 
-  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    plugin?.handleRecordingListen(events)
-    return nil
+  override func onListen(withArguments arguments: Any?, sink: PigeonEventSink<ScreenshotEventMessage>) {
+    plugin?.handleScreenshotListen { sink.success($0) }
   }
 
-  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+  override func onCancel(withArguments arguments: Any?) {
+    plugin?.handleScreenshotCancel()
+  }
+}
+
+private final class ScreenRecordingStreamHandler: ScreenRecordingEventsStreamHandler {
+  weak var plugin: SecureScreenPrivacyPlugin?
+
+  init(plugin: SecureScreenPrivacyPlugin) {
+    self.plugin = plugin
+  }
+
+  override func onListen(withArguments arguments: Any?, sink: PigeonEventSink<ScreenRecordingEventMessage>) {
+    plugin?.handleRecordingListen { sink.success($0) }
+  }
+
+  override func onCancel(withArguments arguments: Any?) {
     plugin?.handleRecordingCancel()
-    return nil
   }
 }
