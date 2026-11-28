@@ -24,6 +24,14 @@ jobs:
           flutter pub get
           flutter pub get --directory example
 
+      # pigeon is pinned in pubspec.yaml, so the generated files only change
+      # when pigeon/messages.dart or the pinned version does.
+      - name: Check the Pigeon files are up to date
+        run: |
+          dart run pigeon --input pigeon/messages.dart
+          dart format lib/src/messages.g.dart
+          git diff --exit-code
+
       - name: Format
         run: dart format --set-exit-if-changed .
 
@@ -192,8 +200,12 @@ jobs:
           flutter-version: 3.38.x
           cache: true
 
+      # pigeon (a dev-only tool for regenerating the platform code) needs a
+      # newer Dart than this Flutter has; the tests don't use it.
       - name: Install Dependencies
-        run: flutter pub get --no-example
+        run: |
+          flutter pub remove pigeon
+          flutter pub get --no-example
 
       - name: Test
         run: flutter test

@@ -16,8 +16,10 @@ export 'secure_screen_privacy_navigator_observer.dart';
 /// screen recording.
 ///
 /// Only Android and iOS are supported. On web, Windows, macOS and Linux every
-/// method throws a `MissingPluginException` and the streams emit it as an
-/// error, so check the platform first if your app also runs there.
+/// method throws a `PlatformException` with code `channel-error`, and the
+/// streams send no events (Flutter reports the failed subscription as a
+/// `MissingPluginException` through `FlutterError`), so check the platform
+/// first if your app also runs there.
 ///
 /// If you also use [SecureScreenPrivacyNavigatorObserver], it sets capture
 /// and App Switcher protection on every route change, which replaces what
