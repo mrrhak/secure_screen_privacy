@@ -12,7 +12,8 @@ abstract class SecureScreenPrivacyPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static SecureScreenPrivacyPlatform _instance = MethodChannelSecureScreenPrivacy();
+  static SecureScreenPrivacyPlatform _instance =
+      MethodChannelSecureScreenPrivacy();
 
   /// The default instance of [SecureScreenPrivacyPlatform] to use.
   ///
@@ -32,15 +33,21 @@ abstract class SecureScreenPrivacyPlatform extends PlatformInterface {
   }
 
   Future<bool> enableCaptureProtection() {
-    throw UnimplementedError('enableCaptureProtection() has not been implemented.');
+    throw UnimplementedError(
+      'enableCaptureProtection() has not been implemented.',
+    );
   }
 
   Future<bool> disableCaptureProtection() {
-    throw UnimplementedError('disableCaptureProtection() has not been implemented.');
+    throw UnimplementedError(
+      'disableCaptureProtection() has not been implemented.',
+    );
   }
 
   Future<bool> isCaptureProtectionEnabled() {
-    throw UnimplementedError('isCaptureProtectionEnabled() has not been implemented.');
+    throw UnimplementedError(
+      'isCaptureProtectionEnabled() has not been implemented.',
+    );
   }
 
   Future<bool> enableAppSwitcherProtection(
@@ -49,15 +56,21 @@ abstract class SecureScreenPrivacyPlatform extends PlatformInterface {
     int color = 0xFF000000,
     int imageBackgroundColor = 0xFF000000,
   }) {
-    throw UnimplementedError('enableAppSwitcherProtection() has not been implemented.');
+    throw UnimplementedError(
+      'enableAppSwitcherProtection() has not been implemented.',
+    );
   }
 
   Future<bool> disableAppSwitcherProtection() {
-    throw UnimplementedError('disableAppSwitcherProtection() has not been implemented.');
+    throw UnimplementedError(
+      'disableAppSwitcherProtection() has not been implemented.',
+    );
   }
 
   Future<bool> isAppSwitcherProtectionEnabled() {
-    throw UnimplementedError('isAppSwitcherProtectionEnabled() has not been implemented.');
+    throw UnimplementedError(
+      'isAppSwitcherProtectionEnabled() has not been implemented.',
+    );
   }
 
   /// A broadcast stream of screenshot detections.

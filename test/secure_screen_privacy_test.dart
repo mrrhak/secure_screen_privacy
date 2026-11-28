@@ -47,7 +47,8 @@ class MockSecureScreenPrivacyPlatform
 }
 
 void main() {
-  final SecureScreenPrivacyPlatform initialPlatform = SecureScreenPrivacyPlatform.instance;
+  final SecureScreenPrivacyPlatform initialPlatform =
+      SecureScreenPrivacyPlatform.instance;
 
   test('$MethodChannelSecureScreenPrivacy is the default instance', () {
     expect(initialPlatform, isInstanceOf<MethodChannelSecureScreenPrivacy>());
@@ -55,7 +56,8 @@ void main() {
 
   test('getPlatformVersion', () async {
     SecureScreenPrivacy secureScreenPrivacyPlugin = SecureScreenPrivacy();
-    MockSecureScreenPrivacyPlatform fakePlatform = MockSecureScreenPrivacyPlatform();
+    MockSecureScreenPrivacyPlatform fakePlatform =
+        MockSecureScreenPrivacyPlatform();
     SecureScreenPrivacyPlatform.instance = fakePlatform;
 
     expect(await secureScreenPrivacyPlugin.getPlatformVersion(), '42');
@@ -94,31 +96,40 @@ void main() {
     );
   });
 
-  test('enableAppSwitcherProtection with a non-default blurIntensity', () async {
-    SecureScreenPrivacy secureScreenPrivacyPlugin = SecureScreenPrivacy();
-    SecureScreenPrivacyPlatform.instance = MockSecureScreenPrivacyPlatform();
+  test(
+    'enableAppSwitcherProtection with a non-default blurIntensity',
+    () async {
+      SecureScreenPrivacy secureScreenPrivacyPlugin = SecureScreenPrivacy();
+      SecureScreenPrivacyPlatform.instance = MockSecureScreenPrivacyPlatform();
 
-    expect(
-      await secureScreenPrivacyPlugin.enableAppSwitcherProtection(
-        AppSwitcherProtectionMode.blur,
-        blurIntensity: BlurIntensity.heavy,
-      ),
-      true,
-    );
-  });
+      expect(
+        await secureScreenPrivacyPlugin.enableAppSwitcherProtection(
+          AppSwitcherProtectionMode.blur,
+          blurIntensity: BlurIntensity.heavy,
+        ),
+        true,
+      );
+    },
+  );
 
   test('disableAppSwitcherProtection', () async {
     SecureScreenPrivacy secureScreenPrivacyPlugin = SecureScreenPrivacy();
     SecureScreenPrivacyPlatform.instance = MockSecureScreenPrivacyPlatform();
 
-    expect(await secureScreenPrivacyPlugin.disableAppSwitcherProtection(), true);
+    expect(
+      await secureScreenPrivacyPlugin.disableAppSwitcherProtection(),
+      true,
+    );
   });
 
   test('isAppSwitcherProtectionEnabled', () async {
     SecureScreenPrivacy secureScreenPrivacyPlugin = SecureScreenPrivacy();
     SecureScreenPrivacyPlatform.instance = MockSecureScreenPrivacyPlatform();
 
-    expect(await secureScreenPrivacyPlugin.isAppSwitcherProtectionEnabled(), true);
+    expect(
+      await secureScreenPrivacyPlugin.isAppSwitcherProtectionEnabled(),
+      true,
+    );
   });
 
   test('screenshotEvents', () async {
