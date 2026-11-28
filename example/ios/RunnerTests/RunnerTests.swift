@@ -378,6 +378,42 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(deduper.shouldEmit(false))
   }
 
+  // MARK: - Screen recording check follows the plugin's own window
+
+  func testRecordingCheck_usesItsOwnWindowsScene() throws {
+    let scene = try hostScene()
+    let own = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { own }
+
+    XCTAssertTrue(plugin.recordingCheckScene() === scene)
+  }
+
+  func testRecordingCheck_withoutOwnWindow_stillPicksTheAppScene() throws {
+    let scene = try hostScene()
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { nil }
+
+    XCTAssertTrue(plugin.recordingCheckScene() === scene)
+  }
+
+  func testRecordingListen_sendsTheOwnScreensStateFirst() throws {
+    let scene = try hostScene()
+    let own = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { own }
+    var events: [[String: Any]] = []
+
+    plugin.handleRecordingListen { event in
+      if let event = event as? [String: Any] { events.append(event) }
+    }
+    drainMainQueue()
+    plugin.handleRecordingCancel()
+
+    XCTAssertEqual(events.count, 1)
+    XCTAssertEqual(events.first?["isRecording"] as? Bool, scene.screen.isCaptured)
+  }
+
   private func drainMainQueue() {
     let delivered = expectation(description: "main queue drained")
     DispatchQueue.main.async { delivered.fulfill() }
