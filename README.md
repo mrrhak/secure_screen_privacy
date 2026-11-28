@@ -427,31 +427,6 @@ You get the current state as soon as you listen, then each change.
 
 </details>
 
-## 🔁 Migrating to 0.1.0
-
-0.1.0 moves the plugin onto [Pigeon](https://pub.dev/packages/pigeon), as in
-Flutter's current plugin template. `SecureScreenPrivacy`, the navigator
-observer, the events and the enums are unchanged, so most apps only need the
-iOS minimum. The breaking changes:
-
-- **iOS 15 or newer.** Before: iOS 13. After: iOS 15. Set
-  `platform :ios, '15.0'` in `ios/Podfile` and the deployment target in Xcode
-  to 15.0 or higher.
-- **Default implementation renamed.** Before:
-  `MethodChannelSecureScreenPrivacy()` from
-  `secure_screen_privacy_method_channel.dart`. After:
-  `PigeonSecureScreenPrivacy()` from `secure_screen_privacy_pigeon.dart`.
-  Only code that used the class directly needs the new name.
-- **Test hooks.** Before: mocking `MethodChannel('secure_screen_privacy')`, or
-  the `methodChannel`, `screenshotEventChannel` and
-  `screenRecordingEventChannel` fields. After: the channels have new internal
-  names, so those mocks no longer take effect. In tests, replace the whole
-  implementation instead: `SecureScreenPrivacyPlatform.instance = FakePlatform();`
-  with a class that extends `SecureScreenPrivacyPlatform`.
-- **Unsupported platforms.** Before: methods threw `MissingPluginException`.
-  After: they throw `PlatformException` with code `channel-error`. Catch
-  `PlatformException`, or check the platform first.
-
 ## 🐞 Bugs or Requests
 
 If you encounter any problems, feel free to open an [issue](https://github.com/mrrhak/secure_screen_privacy/issues/new?template=bug_report.md). If you feel the library is missing a feature, please raise a [ticket](https://github.com/mrrhak/secure_screen_privacy/issues/new?template=feature_request.md) on GitHub and I'll look into it. Pull requests are also welcome.
