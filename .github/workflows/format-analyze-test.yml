@@ -152,6 +152,7 @@ jobs:
   # plugin code runs for real.
   ios-integration-test:
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -162,11 +163,14 @@ jobs:
           channel: stable
           cache: true
 
+      # Picks an iPhone on the newest iOS runtime (the first one listed can
+      # be an old runtime), then waits until it has fully booted.
       - name: Boot an iPhone simulator
         id: simulator
         run: |
-          UDID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          UDID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | test("iOS-[0-9]+-[0-9]+$")) | select(any(.value[]; .name | startswith("iPhone")))] | sort_by(.key | capture("iOS-(?<major>[0-9]+)-(?<minor>[0-9]+)$") | [(.major | tonumber), (.minor | tonumber)]) | last | [.value[] | select(.name | startswith("iPhone"))][0].udid')
           xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Integration tests on the iPhone simulator
