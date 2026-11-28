@@ -2,13 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
   "version": "0.2",
   "language": "en,en-GB",
-  "dictionaries": [
-    "dart",
-    "flutter",
-    "softwareTerms",
-    "companies",
-    "misc"
-  ],
+  "dictionaries": ["dart", "flutter", "softwareTerms", "companies", "misc"],
   "ignorePaths": [
     ".dart_tool/**",
     ".git/**",
@@ -31,10 +25,7 @@
     "**/Messages.g.kt",
     "**/Messages.g.swift"
   ],
-  "ignoreRegExpList": [
-    "/uses: .*/",
-    "/distribution: .*/"
-  ],
+  "ignoreRegExpList": ["/uses: .*/", "/distribution: .*/"],
   "words": [
     "allprojects",
     "ARGB",
@@ -62,6 +53,7 @@
     "recents",
     "reparenting",
     "reparents",
+    "Repobeats",
     "Robolectric",
     "screencap",
     "screenrecord",
