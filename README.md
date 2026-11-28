@@ -140,6 +140,37 @@
 - A stream of screen recording and mirroring start and stop events
 - Works with iPad multi-window: each window protects itself
 
+## 📱 Platform support
+
+| Feature | Android | iOS |
+| --- | --- | --- |
+| Block screenshots | ✅ | ✅ |
+| Block screen recording | ✅ | ✅ |
+| App Switcher: hide content | ✅ | ✅ |
+| App Switcher: `blur` | ❌ plain card | ✅ |
+| App Switcher: `blurIntensity` | ❌ | ✅ |
+| App Switcher: `color` | ✅ Android 13+ (card color) | ✅ |
+| App Switcher: `image` | ❌ card in `imageBackgroundColor` | ✅ |
+| App Switcher: `imageBlur` | ❌ plain card | ✅ |
+| Card follows dark/light mode | ✅ Android 13+ | — |
+| Per-route protection | ✅ | ✅ |
+| Dialog and bottom sheet protection | ✅ | ✅ |
+| go_router and auto_route | ✅ | ✅ |
+| Screenshot events | ✅ | ✅ |
+| Screenshot events of your app only | ✅ Android 14+ | ✅ |
+| Screen recording start and stop events | ✅ Android 15+ | ✅ |
+| Multi-window (each window protected on its own) | — | ✅ iPad |
+| Minimum version | Android 7.0 (API 24) | iOS 15 |
+
+✅ supported · ❌ not supported · — not applicable
+
+Only Android and iOS are supported. On web, Windows, macOS and Linux every
+method throws a `PlatformException` with code `channel-error`, and the event
+streams send no events (Flutter reports the failed subscription as a
+`MissingPluginException` through `FlutterError`). If your app also runs there,
+call the plugin only on Android and iOS (for example, check
+`defaultTargetPlatform` and `kIsWeb` first).
+
 ## 📦 Installation
 
 ```sh
@@ -301,37 +332,6 @@ final subscription = privacy.screenRecordingEvents.listen((event) {
 ```
 
 You get the current state as soon as you listen, then each change.
-
-## 📱 Platform support
-
-| Feature | Android | iOS |
-| --- | --- | --- |
-| Block screenshots | ✅ | ✅ |
-| Block screen recording | ✅ | ✅ |
-| App Switcher: hide content | ✅ | ✅ |
-| App Switcher: `blur` | ❌ plain card | ✅ |
-| App Switcher: `blurIntensity` | ❌ | ✅ |
-| App Switcher: `color` | ✅ Android 13+ (card color) | ✅ |
-| App Switcher: `image` | ❌ card in `imageBackgroundColor` | ✅ |
-| App Switcher: `imageBlur` | ❌ plain card | ✅ |
-| Card follows dark/light mode | ✅ Android 13+ | — |
-| Per-route protection | ✅ | ✅ |
-| Dialog and bottom sheet protection | ✅ | ✅ |
-| go_router and auto_route | ✅ | ✅ |
-| Screenshot events | ✅ | ✅ |
-| Screenshot events of your app only | ✅ Android 14+ | ✅ |
-| Screen recording start and stop events | ✅ Android 15+ | ✅ |
-| Multi-window (each window protected on its own) | — | ✅ iPad |
-| Minimum version | Android 7.0 (API 24) | iOS 15 |
-
-✅ supported · ❌ not supported · — not applicable
-
-Only Android and iOS are supported. On web, Windows, macOS and Linux every
-method throws a `PlatformException` with code `channel-error`, and the event
-streams send no events (Flutter reports the failed subscription as a
-`MissingPluginException` through `FlutterError`). If your app also runs there,
-call the plugin only on Android and iOS (for example, check
-`defaultTargetPlatform` and `kIsWeb` first).
 
 ## 📝 Notes
 
