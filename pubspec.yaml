@@ -10,11 +10,8 @@ topics:
   - privacy
   - security
   - screenshot
-  - screen-recording
+  - app-switcher
   - secure-screen
-screenshots:
-  - description: "Android App Switcher showing a plain teal card for the protected app in color mode"
-    path: doc/images/android_app_switcher.png
 
 environment:
   sdk: ^3.10.0

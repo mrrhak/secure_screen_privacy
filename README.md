@@ -442,6 +442,9 @@ See [CONTRIBUTING.md](https://github.com/mrrhak/secure_screen_privacy/blob/maste
 
 Don't forget to give it a like 👍 or a star ⭐
 
+## 📈 Activities
+![Alt](https://repobeats.axiom.co/api/embed/debe2c9d380fc8913a63170dc6e0448c69e2f133.svg "Repobeats analytics image")
+
 ## 📄 License
 
 MIT. See [LICENSE](LICENSE).
