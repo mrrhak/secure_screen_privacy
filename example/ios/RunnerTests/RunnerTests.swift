@@ -363,6 +363,44 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(events.count, 2)
   }
 
+  // A screenshot of another app, taken while this app keeps running in the
+  // background, must not be reported.
+  func testScreenshotWhileInBackground_isNotReported() {
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.appOnScreenProvider = { false }
+    var events: [Any?] = []
+    _ = plugin.onListen(withArguments: nil) { events.append($0) }
+    defer { _ = plugin.onCancel(withArguments: nil) }
+
+    NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: UIApplication.shared)
+    drainMainQueue()
+
+    XCTAssertTrue(events.isEmpty)
+  }
+
+  // A screenshot dropped while in the background must not start the dedupe
+  // window: the first screenshot after coming back is still reported.
+  func testScreenshotAfterComingBack_isReportedRightAway() {
+    let plugin = SecureScreenPrivacyPlugin()
+    var onScreen = false
+    plugin.appOnScreenProvider = { onScreen }
+    var events: [Any?] = []
+    _ = plugin.onListen(withArguments: nil) { events.append($0) }
+    defer { _ = plugin.onCancel(withArguments: nil) }
+
+    plugin.handleScreenshotTaken()
+    onScreen = true
+    plugin.handleScreenshotTaken()
+    drainMainQueue()
+
+    XCTAssertEqual(events.count, 1)
+  }
+
+  // The test host app is on screen while the tests run.
+  func testIsAppOnScreen_whileTheTestHostIsInFront() {
+    XCTAssertTrue(SecureScreenPrivacyPlugin.isAppOnScreen())
+  }
+
   func testScreenRecordingStateDeduper_dropsTheSameStateAgain() {
     var deduper = ScreenRecordingStateDeduper()
     XCTAssertTrue(deduper.shouldEmit(true))

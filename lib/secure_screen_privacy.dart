@@ -86,8 +86,8 @@ class SecureScreenPrivacy {
   /// subscription *is* the toggle.
   ///
   /// Detection is best-effort on both platforms - see the README for the
-  /// documented caveats (Android 14+: only screenshots of this app's visible
-  /// screen; Android 13 and below: a
+  /// documented caveats (Android 14+ and iOS: only screenshots taken while
+  /// this app is on screen; Android 13 and below: a
   /// de-duplicated heuristic MediaStore filter that can still false-positive
   /// on other new images and false-negative on some OEMs/locales; iOS: no
   /// image data or file path is ever available). On Android, a screenshot

@@ -33,6 +33,9 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // Collapses the duplicate screenshot notifications iOS posts for a single
   // screenshot (see handleScreenshotTaken()).
   var screenshotDeduper = ScreenshotEventDeduper()
+  // Whether the app is on screen right now (see isAppOnScreen()); a
+  // variable so tests can simulate a backgrounded app.
+  var appOnScreenProvider: () -> Bool = { SecureScreenPrivacyPlugin.isAppOnScreen() }
   private var screenRecordingEventSink: FlutterEventSink?
   private var isRecordingListening = false
   // Drops a recording state equal to the last one sent (see
@@ -112,11 +115,33 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // one observer this plugin registers - so every screenshot was reported
   // twice. The deduper drops any repeat that arrives within its window of
   // the last reported screenshot.
+  //
+  // iOS tells every running app about a screenshot, also an app that keeps
+  // running in the background (audio, location, ...), so a screenshot of
+  // another app would be reported. Like Android 14+'s ScreenCaptureCallback,
+  // only a screenshot taken while this app is on screen is reported.
   @objc func handleScreenshotTaken() {
+    guard appOnScreenProvider() else { return }
     guard screenshotDeduper.shouldEmit(at: ProcessInfo.processInfo.systemUptime) else { return }
     let millis = Int64(Date().timeIntervalSince1970 * 1000)
     DispatchQueue.main.async { [weak self] in
       self?.screenshotEventSink?(["timestamp": millis])
+    }
+  }
+
+  // On screen = at least one app window scene is in the foreground, active
+  // or inactive: an inactive scene is still visible (Control Center or a
+  // system alert over it, or the other app focused in iPad Split View), so
+  // it is in the screenshot. Without any app window scene, the app-wide
+  // state decides.
+  static func isAppOnScreen() -> Bool {
+    let appScenes = UIApplication.shared.connectedScenes
+      .filter { $0.session.role == .windowApplication }
+    if appScenes.isEmpty {
+      return UIApplication.shared.applicationState != .background
+    }
+    return appScenes.contains {
+      $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive
     }
   }
 
