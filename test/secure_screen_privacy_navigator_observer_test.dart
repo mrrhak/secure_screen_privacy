@@ -73,7 +73,8 @@ class _DelayedRecordingPlatform extends SecureScreenPrivacyPlatform
   Future<bool> enableCaptureProtection() => _record('enableCaptureProtection');
 
   @override
-  Future<bool> disableCaptureProtection() => _record('disableCaptureProtection');
+  Future<bool> disableCaptureProtection() =>
+      _record('disableCaptureProtection');
 
   @override
   Future<bool> isCaptureProtectionEnabled() => Future.value(false);
@@ -84,11 +85,11 @@ class _DelayedRecordingPlatform extends SecureScreenPrivacyPlatform
     BlurIntensity blurIntensity = BlurIntensity.ultraLight,
     int color = 0xFF000000,
     int imageBackgroundColor = 0xFF000000,
-  }) =>
-      _record('enableAppSwitcherProtection');
+  }) => _record('enableAppSwitcherProtection');
 
   @override
-  Future<bool> disableAppSwitcherProtection() => _record('disableAppSwitcherProtection');
+  Future<bool> disableAppSwitcherProtection() =>
+      _record('disableAppSwitcherProtection');
 
   @override
   Future<bool> isAppSwitcherProtectionEnabled() => Future.value(false);
@@ -182,7 +183,6 @@ class _FakePopupRoute extends PopupRoute<void> {
     Animation<double> secondaryAnimation,
   ) => const SizedBox();
 }
-
 
 /// A root Navigator showing [rootPage], whose page holds a nested Navigator
 /// that starts on [nestedPage]; each Navigator has its own observer.
@@ -660,29 +660,26 @@ void main() {
       },
     );
 
-    test(
-      'a named bottom sheet with an app switcher policy enables it',
-      () async {
-        final observer = SecureScreenPrivacyNavigatorObserver(
-          policies: {
-            '/card-sheet': const SecureRouteConfig(
-              appSwitcherMode: AppSwitcherProtectionMode.color,
-            ),
-          },
-        );
+    test('a named bottom sheet with an app switcher policy enables it', () async {
+      final observer = SecureScreenPrivacyNavigatorObserver(
+        policies: {
+          '/card-sheet': const SecureRouteConfig(
+            appSwitcherMode: AppSwitcherProtectionMode.color,
+          ),
+        },
+      );
 
-        observer.didPush(
-          _fakePopupRoute(name: '/card-sheet'),
-          _fakeRoute('/home'),
-        );
-        await Future<void>.delayed(Duration.zero);
+      observer.didPush(
+        _fakePopupRoute(name: '/card-sheet'),
+        _fakeRoute('/home'),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-        expect(fakePlatform.calls, [
-          'disableCaptureProtection',
-          'enableAppSwitcherProtection(AppSwitcherProtectionMode.color, BlurIntensity.ultraLight, 4278190080, 4278190080)',
-        ]);
-      },
-    );
+      expect(fakePlatform.calls, [
+        'disableCaptureProtection',
+        'enableAppSwitcherProtection(AppSwitcherProtectionMode.color, BlurIntensity.ultraLight, 4278190080, 4278190080)',
+      ]);
+    });
 
     test(
       'closing an unnamed popup opened on top of a protected dialog changes nothing',
@@ -871,28 +868,31 @@ void main() {
       },
     );
 
-    test('route with both capture and app switcher protection calls both enable methods', () async {
-      final observer = SecureScreenPrivacyNavigatorObserver(
-        policies: {
-          '/wallet': const SecureRouteConfig(
-            captureProtection: true,
-            appSwitcherMode: AppSwitcherProtectionMode.color,
-            color: 0xFF123456,
+    test(
+      'route with both capture and app switcher protection calls both enable methods',
+      () async {
+        final observer = SecureScreenPrivacyNavigatorObserver(
+          policies: {
+            '/wallet': const SecureRouteConfig(
+              captureProtection: true,
+              appSwitcherMode: AppSwitcherProtectionMode.color,
+              color: 0xFF123456,
+            ),
+          },
+        );
+
+        observer.didPush(_fakeRoute('/wallet'), null);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(fakePlatform.calls, contains('enableCaptureProtection'));
+        expect(
+          fakePlatform.calls,
+          contains(
+            'enableAppSwitcherProtection(AppSwitcherProtectionMode.color, BlurIntensity.ultraLight, ${0xFF123456}, 4278190080)',
           ),
-        },
-      );
-
-      observer.didPush(_fakeRoute('/wallet'), null);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(fakePlatform.calls, contains('enableCaptureProtection'));
-      expect(
-        fakePlatform.calls,
-        contains(
-          'enableAppSwitcherProtection(AppSwitcherProtectionMode.color, BlurIntensity.ultraLight, ${0xFF123456}, 4278190080)',
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('route with neither set calls both disable methods', () async {
       final observer = SecureScreenPrivacyNavigatorObserver(
@@ -970,7 +970,10 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         expect(throwsOncePlatform.calls, contains('disableCaptureProtection'));
-        expect(throwsOncePlatform.calls, contains('enableAppSwitcherProtection'));
+        expect(
+          throwsOncePlatform.calls,
+          contains('enableAppSwitcherProtection'),
+        );
       },
     );
   });
@@ -1000,32 +1003,27 @@ void main() {
       (call) => call.endsWith('CaptureProtection'),
     );
 
-    testWidgets(
-      'pushAndRemoveUntil to a protected page keeps it protected',
-      (tester) async {
-        final observer = SecureScreenPrivacyNavigatorObserver(
-          policies: {
-            '/home': const SecureRouteConfig(captureProtection: true),
-          },
-        );
-        final nav = await pumpNavigator(tester, observer);
-        nav.push(_fakeRoute('/login'));
-        await tester.pumpAndSettle();
+    testWidgets('pushAndRemoveUntil to a protected page keeps it protected', (
+      tester,
+    ) async {
+      final observer = SecureScreenPrivacyNavigatorObserver(
+        policies: {'/home': const SecureRouteConfig(captureProtection: true)},
+      );
+      final nav = await pumpNavigator(tester, observer);
+      nav.push(_fakeRoute('/login'));
+      await tester.pumpAndSettle();
 
-        nav.pushAndRemoveUntil(_fakeRoute('/home'), (_) => false);
-        await tester.pumpAndSettle();
+      nav.pushAndRemoveUntil(_fakeRoute('/home'), (_) => false);
+      await tester.pumpAndSettle();
 
-        expect(lastCaptureCall(), 'enableCaptureProtection');
-      },
-    );
+      expect(lastCaptureCall(), 'enableCaptureProtection');
+    });
 
     testWidgets(
       'removing a page under a protected page keeps the top protected',
       (tester) async {
         final observer = SecureScreenPrivacyNavigatorObserver(
-          policies: {
-            '/pay': const SecureRouteConfig(captureProtection: true),
-          },
+          policies: {'/pay': const SecureRouteConfig(captureProtection: true)},
         );
         final nav = await pumpNavigator(tester, observer);
         final middle = _fakeRoute('/middle');

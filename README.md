@@ -45,6 +45,14 @@
     <img src="https://img.shields.io/github/contributors/mrrhak/secure_screen_privacy.svg?style=flat&logo=github&colorB=yellow&label=Contributors"
       alt="Contributors" />
   </a>
+  <a href="https://github.com/mrrhak/secure_screen_privacy/actions/workflows/format-analyze-test.yml">
+    <img src="https://github.com/mrrhak/secure_screen_privacy/actions/workflows/format-analyze-test.yml/badge.svg"
+      alt="Build Status" />
+  </a>
+  <a href="https://codecov.io/gh/mrrhak/secure_screen_privacy">
+    <img src="https://codecov.io/gh/mrrhak/secure_screen_privacy/graph/badge.svg"
+      alt="Coverage" />
+  </a>
   <a href="https://github.com/mrrhak/secure_screen_privacy">
     <img src="https://img.shields.io/github/languages/code-size/mrrhak/secure_screen_privacy?logo=github&color=blue&label=Size"
       alt="Code size" />

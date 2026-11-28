@@ -6,7 +6,8 @@ import 'package:secure_screen_privacy/secure_screen_privacy_method_channel.dart'
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  MethodChannelSecureScreenPrivacy platform = MethodChannelSecureScreenPrivacy();
+  MethodChannelSecureScreenPrivacy platform =
+      MethodChannelSecureScreenPrivacy();
   const MethodChannel channel = MethodChannel('secure_screen_privacy');
   const EventChannel screenshotEventChannel = EventChannel(
     'secure_screen_privacy/screenshot_events',
@@ -61,7 +62,9 @@ void main() {
 
   test('enableAppSwitcherProtection', () async {
     expect(
-      await platform.enableAppSwitcherProtection(AppSwitcherProtectionMode.blur),
+      await platform.enableAppSwitcherProtection(
+        AppSwitcherProtectionMode.blur,
+      ),
       true,
     );
   });
@@ -94,12 +97,14 @@ void main() {
   });
 
   test('screenshotEvents maps the native payload', () async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockStreamHandler(
-      screenshotEventChannel,
-      MockStreamHandler.inline(
-        onListen: (arguments, events) => events.success({'timestamp': 1752150000000}),
-      ),
-    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+          screenshotEventChannel,
+          MockStreamHandler.inline(
+            onListen: (arguments, events) =>
+                events.success({'timestamp': 1752150000000}),
+          ),
+        );
 
     final event = await platform.screenshotEvents.first;
 
@@ -107,13 +112,16 @@ void main() {
   });
 
   test('screenRecordingEvents maps the native payload', () async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockStreamHandler(
-      screenRecordingEventChannel,
-      MockStreamHandler.inline(
-        onListen: (arguments, events) =>
-            events.success({'isRecording': true, 'timestamp': 1752150000000}),
-      ),
-    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+          screenRecordingEventChannel,
+          MockStreamHandler.inline(
+            onListen: (arguments, events) => events.success({
+              'isRecording': true,
+              'timestamp': 1752150000000,
+            }),
+          ),
+        );
 
     final event = await platform.screenRecordingEvents.first;
 
@@ -122,30 +130,42 @@ void main() {
     expect(event.timestamp, DateTime.fromMillisecondsSinceEpoch(1752150000000));
   });
 
-  test('screenRecordingEvents maps isRecording false to notRecording', () async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockStreamHandler(
-      screenRecordingEventChannel,
-      MockStreamHandler.inline(
-        onListen: (arguments, events) =>
-            events.success({'isRecording': false, 'timestamp': 1752150000000}),
-      ),
-    );
+  test(
+    'screenRecordingEvents maps isRecording false to notRecording',
+    () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(
+            screenRecordingEventChannel,
+            MockStreamHandler.inline(
+              onListen: (arguments, events) => events.success({
+                'isRecording': false,
+                'timestamp': 1752150000000,
+              }),
+            ),
+          );
 
-    final event = await platform.screenRecordingEvents.first;
+      final event = await platform.screenRecordingEvents.first;
 
-    expect(event.state, ScreenRecordingState.notRecording);
-    expect(event.isRecording, false);
-    expect(event.timestamp, DateTime.fromMillisecondsSinceEpoch(1752150000000));
-  });
+      expect(event.state, ScreenRecordingState.notRecording);
+      expect(event.isRecording, false);
+      expect(
+        event.timestamp,
+        DateTime.fromMillisecondsSinceEpoch(1752150000000),
+      );
+    },
+  );
 
   test('screenRecordingEvents maps isRecording null to unknown', () async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockStreamHandler(
-      screenRecordingEventChannel,
-      MockStreamHandler.inline(
-        onListen: (arguments, events) =>
-            events.success({'isRecording': null, 'timestamp': 1752150000000}),
-      ),
-    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+          screenRecordingEventChannel,
+          MockStreamHandler.inline(
+            onListen: (arguments, events) => events.success({
+              'isRecording': null,
+              'timestamp': 1752150000000,
+            }),
+          ),
+        );
 
     final event = await platform.screenRecordingEvents.first;
 

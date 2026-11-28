@@ -50,18 +50,16 @@ class MethodChannelSecureScreenPrivacy extends SecureScreenPrivacyPlatform {
         // Native sends null when it can't tell (Android 14 and below).
         final isRecording = map['isRecording'] as bool?;
         final millis = map['timestamp'] as int;
-        return ScreenRecordingEvent(
-          switch (isRecording) {
-            true => ScreenRecordingState.recording,
-            false => ScreenRecordingState.notRecording,
-            null => ScreenRecordingState.unknown,
-          },
-          DateTime.fromMillisecondsSinceEpoch(millis),
-        );
+        return ScreenRecordingEvent(switch (isRecording) {
+          true => ScreenRecordingState.recording,
+          false => ScreenRecordingState.notRecording,
+          null => ScreenRecordingState.unknown,
+        }, DateTime.fromMillisecondsSinceEpoch(millis));
       });
 
   @override
-  Stream<ScreenRecordingEvent> get screenRecordingEvents => _screenRecordingEvents;
+  Stream<ScreenRecordingEvent> get screenRecordingEvents =>
+      _screenRecordingEvents;
 
   @override
   Future<String?> getPlatformVersion() async {
@@ -102,15 +100,13 @@ class MethodChannelSecureScreenPrivacy extends SecureScreenPrivacyPlatform {
     int color = 0xFF000000,
     int imageBackgroundColor = 0xFF000000,
   }) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'enableAppSwitcherProtection',
-      {
-        'mode': mode.name,
-        'blurIntensity': blurIntensity.name,
-        'color': color,
-        'imageBackgroundColor': imageBackgroundColor,
-      },
-    );
+    final result = await methodChannel
+        .invokeMethod<bool>('enableAppSwitcherProtection', {
+          'mode': mode.name,
+          'blurIntensity': blurIntensity.name,
+          'color': color,
+          'imageBackgroundColor': imageBackgroundColor,
+        });
     return result ?? false;
   }
 
