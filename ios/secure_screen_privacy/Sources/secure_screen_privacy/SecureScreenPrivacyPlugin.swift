@@ -132,20 +132,32 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
   // there's no "stuck true" problem here.
 
   private var isScreenCaptured: Bool {
-    if let scene = activeWindow()?.windowScene {
-      return scene.screen.isCaptured
-    }
-    // activeWindow() can return nil very early (e.g. onListen fires before
-    // any UIWindowScene has become foregroundActive) - fall back to any
-    // connected scene rather than defaulting to "not recording", since a
-    // false negative here would silently drop a genuinely active recording.
-    if let anyScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-      return anyScene.screen.isCaptured
-    }
-    return false
+    recordingCheckScene()?.screen.isCaptured ?? false
   }
 
-  fileprivate func handleRecordingListen(_ events: @escaping FlutterEventSink) {
+  // The scene whose screen says whether this app is being recorded or
+  // mirrored: the scene of this engine's own window first, like capture
+  // protection (protectionTargetWindow()). Before, it was the active scene's
+  // key window, which on iPad multi-window can be another window of the app,
+  // on another screen with Stage Manager and an external display, and is
+  // nil while the app is inactive (e.g. Control Center open to start a
+  // recording); the fallback then took any connected scene, which could be
+  // an external-display scene instead of an app window. Without an own
+  // window: the active window's scene, then an app-window scene (active,
+  // then inactive, then any), then any scene. A false negative would drop a
+  // real recording, so a scene is always picked when one exists.
+  func recordingCheckScene() -> UIWindowScene? {
+    if let scene = ownWindowProvider()?.windowScene { return scene }
+    if let scene = activeWindow()?.windowScene { return scene }
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let appScenes = scenes.filter { $0.session.role == .windowApplication }
+    return appScenes.first(where: { $0.activationState == .foregroundActive })
+      ?? appScenes.first(where: { $0.activationState == .foregroundInactive })
+      ?? appScenes.first
+      ?? scenes.first
+  }
+
+  func handleRecordingListen(_ events: @escaping FlutterEventSink) {
     screenRecordingEventSink = events
     isRecordingListening = true
     // A new subscriber always gets the current state first.
@@ -161,7 +173,7 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     emitScreenRecordingEvent(isScreenCaptured)
   }
 
-  fileprivate func handleRecordingCancel() {
+  func handleRecordingCancel() {
     NotificationCenter.default.removeObserver(self, name: UIScreen.capturedDidChangeNotification, object: nil)
     isRecordingListening = false
     screenRecordingEventSink = nil
