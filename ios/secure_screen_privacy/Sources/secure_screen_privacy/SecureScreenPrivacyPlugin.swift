@@ -596,6 +596,48 @@ public class SecureScreenPrivacyPlugin: NSObject, FlutterPlugin, FlutterSceneLif
     screenPreventField.isSecureTextEntry = true
   }
 
+  // The snapshot iOS saves when the app enters the background (shown in the
+  // App Switcher afterwards) treats the secure layer like any other capture,
+  // so with capture protection on and app switcher protection off it came out
+  // all black. The live App Switcher (opened straight from the app) was fine.
+  // So the secure field is switched off once the window is in the background,
+  // where nothing of it is on screen to capture, and back on before it
+  // returns. With app switcher protection on, the overlay already handles the
+  // snapshot (see showOverlay()), and the field stays as it is.
+  // `scene` is nil for the app-delegate variants (the whole app).
+  private func handleDidEnterBackground(scene: UIScene?) {
+    guard isCaptureProtectionEnabled, !isAppSwitcherProtectionEnabled,
+      let attached = attachedWindow
+    else { return }
+    if let scene = scene, attached.windowScene !== scene { return }
+    screenPreventField.isSecureTextEntry = false
+  }
+
+  private func handleWillEnterForeground(scene: UIScene?) {
+    guard isCaptureProtectionEnabled, let attached = attachedWindow else { return }
+    if let scene = scene, attached.windowScene !== scene { return }
+    // Still covered by the app switcher overlay: showOverlay() keeps the
+    // field off until handleDidBecomeActive() removes the overlay.
+    if overlays.object(forKey: attached) != nil { return }
+    screenPreventField.isSecureTextEntry = true
+  }
+
+  public func applicationDidEnterBackground(_ application: UIApplication) {
+    handleDidEnterBackground(scene: nil)
+  }
+
+  public func sceneDidEnterBackground(_ scene: UIScene) {
+    handleDidEnterBackground(scene: scene)
+  }
+
+  public func applicationWillEnterForeground(_ application: UIApplication) {
+    handleWillEnterForeground(scene: nil)
+  }
+
+  public func sceneWillEnterForeground(_ scene: UIScene) {
+    handleWillEnterForeground(scene: scene)
+  }
+
   public func applicationWillResignActive(_ application: UIApplication) {
     handleWillResignActive(windows: appDelegateWindow(application).map { [$0] } ?? [])
   }

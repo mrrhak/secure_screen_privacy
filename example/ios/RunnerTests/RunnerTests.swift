@@ -171,6 +171,90 @@ class RunnerTests: XCTestCase {
     call(plugin, "disableCaptureProtection")
   }
 
+  // MARK: - Background snapshot with capture protection only
+
+  // The snapshot iOS saves on entering the background was all black with
+  // only capture protection on: the secure field must be off while the
+  // window is in the background and back on before it returns.
+  func testCaptureProtectionOnly_isOffInBackground_andBackOnInForeground() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { window }
+    call(plugin, "enableCaptureProtection")
+    XCTAssertTrue(plugin.isProtecting(window))
+
+    plugin.sceneDidEnterBackground(scene)
+    XCTAssertFalse(plugin.isProtecting(window))
+
+    plugin.sceneWillEnterForeground(scene)
+    XCTAssertTrue(plugin.isProtecting(window))
+    call(plugin, "disableCaptureProtection")
+  }
+
+  func testCaptureProtectionOnly_appDelegateVariants_switchItOffAndOn() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { window }
+    call(plugin, "enableCaptureProtection")
+
+    plugin.applicationDidEnterBackground(UIApplication.shared)
+    XCTAssertFalse(plugin.isProtecting(window))
+
+    plugin.applicationWillEnterForeground(UIApplication.shared)
+    XCTAssertTrue(plugin.isProtecting(window))
+    call(plugin, "disableCaptureProtection")
+  }
+
+  // With app switcher protection on, the overlay handles the snapshot:
+  // entering the background must not switch the secure field off by itself.
+  func testBackground_withAppSwitcherProtection_leavesSecureFieldToOverlay() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { window }
+    call(plugin, "enableCaptureProtection")
+    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+
+    plugin.sceneDidEnterBackground(scene)
+    XCTAssertTrue(plugin.isProtecting(window))
+    call(plugin, "disableAppSwitcherProtection")
+    call(plugin, "disableCaptureProtection")
+  }
+
+  // Still covered by the overlay on the way back: the field stays off until
+  // didBecomeActive removes the overlay, as before.
+  func testWillEnterForeground_whileCovered_keepsSecureFieldOffUntilActive() throws {
+    let scene = try hostScene()
+    let window = makeVisibleWindow(in: scene)
+    let plugin = SecureScreenPrivacyPlugin()
+    plugin.ownWindowProvider = { window }
+    call(plugin, "enableCaptureProtection")
+    call(plugin, "enableAppSwitcherProtection", ["mode": "color"])
+    plugin.sceneWillResignActive(scene)
+    XCTAssertFalse(plugin.isProtecting(window))
+
+    plugin.sceneDidEnterBackground(scene)
+    plugin.sceneWillEnterForeground(scene)
+    XCTAssertFalse(plugin.isProtecting(window))
+
+    plugin.sceneDidBecomeActive(scene)
+    XCTAssertTrue(plugin.isProtecting(window))
+    call(plugin, "disableAppSwitcherProtection")
+    call(plugin, "disableCaptureProtection")
+  }
+
+  func testCaptureProtectionOff_backgroundAndForeground_neverMoveTheWindow() throws {
+    let scene = try hostScene()
+    let plugin = SecureScreenPrivacyPlugin()
+
+    plugin.sceneDidEnterBackground(scene)
+    plugin.sceneWillEnterForeground(scene)
+
+    XCTAssertFalse(plugin.isWindowAttachedToSecureField)
+  }
+
   // MARK: - Image modes without the SecureScreenPrivacyImage asset
 
   func testImageMode_withoutImageAsset_isEnabledAndCoversWithBackgroundColor() throws {
